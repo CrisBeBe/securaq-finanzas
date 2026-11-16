@@ -1,0 +1,1308 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>SecuraQ Finanzas | Control Financiero Móvil</title>
+  
+  <!-- Metadatos PWA y Móvil -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SecuraQ">
+  <meta name="theme-color" content="#020617">
+  <meta name="description" content="Sistema de gestión financiera personal y cálculo de capital para inversión por CrisBeBe">
+
+  <!-- Tipografía Google Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: {
+              emerald: '#10b981',
+              cyan: '#06b6d4',
+              blue: '#3b82f6',
+              amber: '#f59e0b',
+              rose: '#f43f5e',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Alpine.js CDN -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js"></script>
+
+  <style>
+    /* Estilos Mobile-First y toques táctiles */
+    body {
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    }
+    input, textarea, select {
+      user-select: auto;
+    }
+    /* Scrollbar estilizada */
+    ::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #020617;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1e293b;
+      border-radius: 9999px;
+    }
+    .pb-safe {
+      padding-bottom: env(safe-area-inset-bottom, 1.25rem);
+    }
+    .pt-safe {
+      padding-top: env(safe-area-inset-top, 0.75rem);
+    }
+    /* Efecto Glow */
+    .glow-emerald {
+      box-shadow: 0 0 25px -5px rgba(16, 185, 129, 0.25);
+    }
+    .glow-cyan {
+      box-shadow: 0 0 25px -5px rgba(6, 182, 212, 0.2);
+    }
+  </style>
+</head>
+
+<body class="bg-slate-950 text-slate-100 min-h-screen antialiased flex justify-center font-sans">
+
+  <!-- Contenedor Maquetado Mobile-First (Emulación Móvil centrada en Desktop, fluida en smartphone) -->
+  <div 
+    x-data="securaqApp()" 
+    x-init="initApp()" 
+    class="w-full max-w-md min-h-screen bg-slate-950 flex flex-col relative border-x border-slate-900 shadow-2xl"
+  >
+
+    <!-- TOP BAR STICKY HEADER -->
+    <header class="sticky top-0 z-40 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/80 px-4 py-3 pt-safe flex items-center justify-between">
+      <div class="flex items-center space-x-2.5">
+        <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+          <svg class="w-5 h-5 text-slate-950 font-bold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center space-x-1.5">
+            <h1 class="text-sm font-bold tracking-tight text-white">SecuraQ Finanzas</h1>
+            <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/20">v1.0 Pro</span>
+          </div>
+          <p class="text-[11px] text-slate-400">Owner: <span class="text-cyan-400 font-medium" x-text="userData.owner">CrisBeBe</span></p>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-1.5">
+        <!-- Botón Exportar Rápido -->
+        <button 
+          @click="exportData()" 
+          title="Exportar Respaldo JSON" 
+          class="p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white active:scale-95 transition"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+          </svg>
+        </button>
+
+        <!-- Botón Despliegue / Info -->
+        <button 
+          @click="showDeployModal = true" 
+          title="Guía GitHub & Vercel" 
+          class="p-2 rounded-lg bg-cyan-950/40 border border-cyan-800/50 text-cyan-400 hover:text-cyan-300 active:scale-95 transition"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- TOAST NOTIFICACIÓN FLOTANTE -->
+    <div 
+      x-show="toast.visible" 
+      x-transition:enter="transition ease-out duration-300 transform"
+      x-transition:enter-start="-translate-y-4 opacity-0"
+      x-transition:enter-end="translate-y-0 opacity-100"
+      x-transition:leave="transition ease-in duration-200 transform"
+      x-transition:leave-start="translate-y-0 opacity-100"
+      x-transition:leave-end="-translate-y-4 opacity-0"
+      class="fixed top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl text-xs font-semibold shadow-xl flex items-center space-x-2 border"
+      :class="toast.type === 'success' ? 'bg-emerald-950/95 border-emerald-500/40 text-emerald-300' : 'bg-slate-900 border-slate-700 text-slate-200'"
+      style="display: none;"
+    >
+      <span x-text="toast.message"></span>
+    </div>
+
+    <!-- MAIN SCROLLABLE CONTENT AREA -->
+    <main class="flex-1 overflow-y-auto px-4 py-4 space-y-4 pb-28">
+
+      <!-- ================= PESTAÑA 1: DASHBOARD ================= -->
+      <section x-show="activeTab === 'dashboard'" class="space-y-4" x-transition.opacity>
+
+        <!-- TARJETA HERO: CAPITAL LIBRE PARA INVERSIÓN -->
+        <div class="relative overflow-hidden rounded-2xl bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border border-emerald-500/30 p-5 glow-emerald">
+          <div class="absolute -right-10 -bottom-10 w-44 h-44 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+          <div class="absolute -left-10 -top-10 w-36 h-36 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none"></div>
+
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-medium text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              Capital Libre para Inversión
+            </span>
+            <span class="text-[11px] px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800/60 font-semibold font-mono" x-text="`${savingsRate.toFixed(1)}% del total`">
+              0%
+            </span>
+          </div>
+
+          <div class="flex items-baseline space-x-1.5 my-1">
+            <span class="text-2xl font-semibold text-emerald-400">S/</span>
+            <span class="text-4xl font-extrabold tracking-tight text-white font-mono" x-text="formatNumber(netFreeCapital)">
+              0.00
+            </span>
+          </div>
+          <p class="text-xs text-slate-400 mb-4">
+            Total neto tras cubrir sueldo base, ingresos extra, costos fijos y gastos de bolsillo.
+          </p>
+
+          <!-- DESGLOSE EN 3 MINITARJETAS -->
+          <div class="grid grid-cols-3 gap-2 pt-3 border-t border-slate-800/80">
+            <!-- Ingresos -->
+            <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-2.5 text-center">
+              <div class="text-[10px] text-cyan-400 font-semibold uppercase">Ingresos</div>
+              <div class="text-xs font-bold text-white font-mono mt-0.5" x-text="`S/ ${formatNumber(totalIncome)}`">S/ 0</div>
+              <div class="text-[9px] text-slate-500" x-text="`${externalIncomes.length} extras`">0 extras</div>
+            </div>
+
+            <!-- Fijos -->
+            <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-2.5 text-center">
+              <div class="text-[10px] text-amber-400 font-semibold uppercase">Fijos</div>
+              <div class="text-xs font-bold text-white font-mono mt-0.5" x-text="`S/ ${formatNumber(totalFixedExpenses)}`">S/ 0</div>
+              <div class="text-[9px] text-slate-500" x-text="`${fixedExpenses.length} servicios`">0 serv.</div>
+            </div>
+
+            <!-- Bolsillo -->
+            <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-2.5 text-center">
+              <div class="text-[10px] text-rose-400 font-semibold uppercase">Bolsillo</div>
+              <div class="text-xs font-bold text-white font-mono mt-0.5" x-text="`S/ ${formatNumber(totalDailyExpenses)}`">S/ 0</div>
+              <div class="text-[9px] text-slate-500" x-text="`${dailyExpenses.length} movs`">0 movs</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- MÓDULO QUINCENAL (S/ 475 Y S/ 475) -->
+        <div class="rounded-2xl bg-slate-900/80 border border-slate-800/80 p-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <span class="p-1.5 rounded-lg bg-blue-500/10 text-blue-400">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+              </span>
+              <h2 class="text-sm font-bold text-white">Desglose de Quincenas</h2>
+            </div>
+            <span class="text-xs font-mono text-cyan-400 font-semibold" x-text="`S/ ${formatNumber(userData.baseSalary / 2)} c/u`">S/ 475 c/u</span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2.5">
+            <!-- Quincena 1 -->
+            <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-3 space-y-1.5">
+              <div class="flex items-center justify-between text-xs">
+                <span class="font-bold text-slate-300">1ra Quincena (1-15)</span>
+                <span class="text-[10px] font-mono text-slate-400">Día 15</span>
+              </div>
+              <div class="text-base font-bold text-white font-mono" x-text="`S/ ${formatNumber(userData.baseSalary / 2)}`">S/ 475</div>
+              <p class="text-[10px] text-slate-400 leading-tight">
+                Recomendado: Alquiler (S/ 200) + Agua/Luz (S/ 37) = S/ 237.
+              </p>
+              <div class="text-[11px] font-semibold text-emerald-400 font-mono">
+                Libre aprox: S/ 238
+              </div>
+            </div>
+
+            <!-- Quincena 2 -->
+            <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-3 space-y-1.5">
+              <div class="flex items-center justify-between text-xs">
+                <span class="font-bold text-slate-300">2da Quincena (16-30)</span>
+                <span class="text-[10px] font-mono text-slate-400">Fin de mes</span>
+              </div>
+              <div class="text-base font-bold text-white font-mono" x-text="`S/ ${formatNumber(userData.baseSalary / 2)}`">S/ 475</div>
+              <p class="text-[10px] text-slate-400 leading-tight">
+                Spotify (S/ 15) + Inversión fuerte + Compras estratégicas.
+              </p>
+              <div class="text-[11px] font-semibold text-emerald-400 font-mono">
+                Libre aprox: S/ 460
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ACCIONES RÁPIDAS (FLOATING STYLE) -->
+        <div class="grid grid-cols-2 gap-2">
+          <button 
+            @click="openModal('quickDaily')" 
+            class="flex items-center justify-center space-x-2 py-3 px-4 rounded-xl bg-gradient-to-r from-rose-600/20 to-amber-600/20 border border-rose-500/30 text-rose-300 hover:text-white font-medium text-xs active:scale-95 transition"
+          >
+            <svg class="w-4 h-4 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+            </svg>
+            <span>+ Gasto Diario</span>
+          </button>
+
+          <button 
+            @click="openModal('quickIncome')" 
+            class="flex items-center justify-center space-x-2 py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600/20 to-cyan-600/20 border border-emerald-500/30 text-emerald-300 hover:text-white font-medium text-xs active:scale-95 transition"
+          >
+            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+            </svg>
+            <span>+ Ingreso Extra</span>
+          </button>
+        </div>
+
+        <!-- RESUMEN DE SALUD FINANCIERA RÁPIDA -->
+        <div class="rounded-2xl bg-slate-900/80 border border-slate-800/80 p-4 space-y-3">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-bold text-white">Semáforo Financiero SecuraQ</span>
+            <span 
+              class="px-2 py-0.5 rounded-full font-bold text-[10px]"
+              :class="savingsRate >= 40 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : (savingsRate >= 20 ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30')"
+              x-text="savingsRate >= 40 ? 'Excelente Salud' : (savingsRate >= 20 ? 'Aceptable' : 'Alerta de Gastos')"
+            ></span>
+          </div>
+
+          <!-- Barra de progreso -->
+          <div class="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden flex border border-slate-800">
+            <div class="bg-amber-500 h-full" :style="`width: ${Math.min((totalFixedExpenses / totalIncome) * 100, 100)}%`" title="Fijos"></div>
+            <div class="bg-rose-500 h-full" :style="`width: ${Math.min((totalDailyExpenses / totalIncome) * 100, 100)}%`" title="Bolsillo"></div>
+            <div class="bg-emerald-500 h-full" :style="`width: ${Math.max(savingsRate, 0)}%`" title="Ahorro/Inversión"></div>
+          </div>
+
+          <div class="flex items-center justify-between text-[10px] text-slate-400">
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-500"></span> Fijos (<span x-text="((totalFixedExpenses / totalIncome) * 100).toFixed(0) + '%'"></span>)</span>
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-rose-500"></span> Bolsillo (<span x-text="((totalDailyExpenses / totalIncome) * 100).toFixed(0) + '%'"></span>)</span>
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-500"></span> Inversión (<span x-text="savingsRate.toFixed(0) + '%'"></span>)</span>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ================= PESTAÑA 2: INGRESOS ================= -->
+      <section x-show="activeTab === 'incomes'" class="space-y-4" style="display: none;" x-transition.opacity>
+        
+        <!-- SUELDO BASE CONFIGURABLE -->
+        <div class="rounded-2xl bg-slate-900/90 border border-cyan-500/30 p-4 space-y-3 glow-cyan">
+          <div class="flex items-center justify-between">
+            <div>
+              <h2 class="text-sm font-bold text-white">Sueldo Base Mensual</h2>
+              <p class="text-[11px] text-slate-400">Tu ingreso fijo recurrente de trabajo</p>
+            </div>
+            <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800 font-mono">Fijo</span>
+          </div>
+
+          <div class="flex items-center space-x-2">
+            <span class="text-lg font-bold text-cyan-400">S/</span>
+            <input 
+              type="number" 
+              step="10" 
+              x-model.number="userData.baseSalary" 
+              @input="saveData()"
+              class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xl font-bold font-mono text-white focus:outline-none focus:border-cyan-400 transition"
+              placeholder="950"
+            >
+          </div>
+
+          <div class="flex justify-between items-center text-[11px] text-slate-400 pt-1">
+            <span>Quincenas automáticas:</span>
+            <span class="font-mono text-cyan-300 font-semibold" x-text="`2 pagos de S/ ${formatNumber(userData.baseSalary / 2)}`">2 pagos de S/ 475.00</span>
+          </div>
+        </div>
+
+        <!-- INGRESOS EXTERNOS / FREELANCE -->
+        <div class="rounded-2xl bg-slate-900/80 border border-slate-800/80 p-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-sm font-bold text-white">Ingresos Externos y Freelance</h3>
+              <p class="text-[11px] text-slate-400">Web, tecnología, soportes y ventas extras</p>
+            </div>
+            <button 
+              @click="openModal('quickIncome')" 
+              class="px-3 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/40 text-xs font-semibold flex items-center gap-1 active:scale-95 transition"
+            >
+              + Agregar
+            </button>
+          </div>
+
+          <!-- LISTA DINÁMICA DE INGRESOS EXTRA -->
+          <div class="space-y-2">
+            <template x-for="(item, index) in externalIncomes" :key="item.id">
+              <div class="flex items-center justify-between p-3 rounded-xl bg-slate-950/80 border border-slate-800/80 hover:border-slate-700 transition">
+                <div class="space-y-0.5">
+                  <div class="text-xs font-bold text-white" x-text="item.title"></div>
+                  <div class="flex items-center gap-2 text-[10px] text-slate-400">
+                    <span class="px-1.5 py-0.2 rounded bg-slate-900 border border-slate-800 text-cyan-400 font-medium" x-text="item.category"></span>
+                    <span x-text="item.date"></span>
+                  </div>
+                </div>
+
+                <div class="flex items-center space-x-2">
+                  <span class="text-xs font-bold font-mono text-emerald-400" x-text="`+ S/ ${formatNumber(item.amount)}`"></span>
+                  <button 
+                    @click="deleteExternalIncome(index)" 
+                    class="p-1 text-slate-500 hover:text-rose-400 active:scale-90 transition"
+                    title="Eliminar"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </template>
+
+            <div x-show="externalIncomes.length === 0" class="text-center py-6 text-xs text-slate-500 border border-dashed border-slate-800 rounded-xl">
+              No tienes ingresos externos registrados este mes.
+            </div>
+          </div>
+
+          <!-- Total de Ingresos Externos -->
+          <div class="flex justify-between items-center pt-2 border-t border-slate-800/80 text-xs">
+            <span class="text-slate-400 font-medium">Total Ingresos Externos:</span>
+            <span class="font-bold text-emerald-400 font-mono" x-text="`S/ ${formatNumber(totalExternalIncomes)}`">S/ 0.00</span>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ================= PESTAÑA 3: GASTOS ================= -->
+      <section x-show="activeTab === 'expenses'" class="space-y-4" style="display: none;" x-transition.opacity>
+        
+        <!-- SUB-TABS: GASTOS FIJOS VS GASTOS DE BOLSILLO -->
+        <div class="grid grid-cols-2 gap-1.5 p-1 bg-slate-900 rounded-xl border border-slate-800">
+          <button 
+            @click="expenseSubTab = 'fixed'" 
+            class="py-2 text-xs font-semibold rounded-lg transition"
+            :class="expenseSubTab === 'fixed' ? 'bg-slate-800 text-white shadow' : 'text-slate-400 hover:text-white'"
+          >
+            Gastos Fijos (<span x-text="fixedExpenses.length"></span>)
+          </button>
+          <button 
+            @click="expenseSubTab = 'daily'" 
+            class="py-2 text-xs font-semibold rounded-lg transition"
+            :class="expenseSubTab === 'daily' ? 'bg-slate-800 text-white shadow' : 'text-slate-400 hover:text-white'"
+          >
+            Diarios / Bolsillo (<span x-text="dailyExpenses.length"></span>)
+          </button>
+        </div>
+
+        <!-- SECCIÓN GASTOS FIJOS -->
+        <div x-show="expenseSubTab === 'fixed'" class="space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-300">Obligaciones Mensuales</span>
+            <button 
+              @click="openModal('quickFixed')" 
+              class="px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/40 text-xs font-semibold active:scale-95 transition"
+            >
+              + Nuevo Gasto Fijo
+            </button>
+          </div>
+
+          <div class="space-y-2">
+            <template x-for="(expense, index) in fixedExpenses" :key="expense.id">
+              <div 
+                class="flex items-center justify-between p-3 rounded-xl border transition"
+                :class="expense.isPaidOff ? 'bg-slate-950/40 border-slate-900 opacity-60' : (expense.paid ? 'bg-slate-950/90 border-slate-800' : 'bg-slate-950/90 border-amber-500/30')"
+              >
+                <div class="flex items-center space-x-3">
+                  <!-- Checkbox de Pagado -->
+                  <button 
+                    @click="toggleFixedPaid(index)" 
+                    class="w-5 h-5 rounded-md flex items-center justify-center border transition"
+                    :class="expense.paid ? 'bg-emerald-500 border-emerald-400 text-slate-950' : 'bg-slate-900 border-slate-700 text-transparent'"
+                  >
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+                    </svg>
+                  </button>
+
+                  <div>
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-xs font-bold text-white" x-text="expense.title"></span>
+                      <template x-if="expense.isPaidOff">
+                        <span class="text-[9px] px-1.5 py-0.2 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 font-semibold">Saldado</span>
+                      </template>
+                    </div>
+                    <div class="text-[10px] text-slate-400 flex items-center gap-2">
+                      <span x-text="expense.category"></span>
+                      <span>•</span>
+                      <span x-text="expense.dueDate"></span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="flex items-center space-x-2">
+                  <span class="text-xs font-bold font-mono" :class="expense.isPaidOff ? 'text-slate-500 line-through' : 'text-amber-400'" x-text="`S/ ${formatNumber(expense.amount)}`"></span>
+                  <button 
+                    @click="deleteFixedExpense(index)" 
+                    class="p-1 text-slate-500 hover:text-rose-400 transition"
+                  >
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </template>
+          </div>
+
+          <div class="flex justify-between items-center p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-xs">
+            <span class="text-slate-400 font-medium">Total Gastos Fijos Activos:</span>
+            <span class="font-bold text-amber-400 font-mono" x-text="`S/ ${formatNumber(totalFixedExpenses)}`">S/ 0.00</span>
+          </div>
+        </div>
+
+        <!-- SECCIÓN GASTOS DIARIOS DE BOLSILLO -->
+        <div x-show="expenseSubTab === 'daily'" class="space-y-3" style="display: none;">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-300">Historial Diario / Quincenal</span>
+            <button 
+              @click="openModal('quickDaily')" 
+              class="px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-400 border border-rose-500/40 text-xs font-semibold active:scale-95 transition"
+            >
+              + Registrar Gasto
+            </button>
+          </div>
+
+          <div class="space-y-2 max-h-[380px] overflow-y-auto pr-1">
+            <template x-for="(daily, index) in dailyExpenses" :key="daily.id">
+              <div class="flex items-center justify-between p-3 rounded-xl bg-slate-950/80 border border-slate-800/80">
+                <div>
+                  <div class="text-xs font-bold text-white" x-text="daily.title"></div>
+                  <div class="text-[10px] text-slate-400 flex items-center gap-2">
+                    <span class="text-rose-400 font-medium" x-text="daily.category"></span>
+                    <span>•</span>
+                    <span x-text="daily.date"></span>
+                  </div>
+                </div>
+
+                <div class="flex items-center space-x-2">
+                  <span class="text-xs font-bold font-mono text-rose-400" x-text="`- S/ ${formatNumber(daily.amount)}`"></span>
+                  <button 
+                    @click="deleteDailyExpense(index)" 
+                    class="p-1 text-slate-500 hover:text-rose-400 transition"
+                  >
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </template>
+
+            <div x-show="dailyExpenses.length === 0" class="text-center py-6 text-xs text-slate-500 border border-dashed border-slate-800 rounded-xl">
+              No hay consumos de bolsillo registrados aún.
+            </div>
+          </div>
+
+          <div class="flex justify-between items-center p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-xs">
+            <span class="text-slate-400 font-medium">Total Gastos de Bolsillo:</span>
+            <span class="font-bold text-rose-400 font-mono" x-text="`S/ ${formatNumber(totalDailyExpenses)}`">S/ 0.00</span>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ================= PESTAÑA 4: ASESOR INTELIGENTE & INVERSIÓN ================= -->
+      <section x-show="activeTab === 'advisor'" class="space-y-4" style="display: none;" x-transition.opacity>
+        
+        <div class="rounded-2xl bg-gradient-to-tr from-slate-900 via-slate-900 to-emerald-950/40 border border-emerald-500/30 p-4 space-y-3">
+          <div class="flex items-center space-x-2">
+            <span class="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+              </svg>
+            </span>
+            <div>
+              <h2 class="text-sm font-bold text-white">Estrategia Financiera CrisBeBe</h2>
+              <p class="text-[11px] text-slate-400">Optimizado para tu ingreso de S/ 950 + extras</p>
+            </div>
+          </div>
+
+          <!-- DIAGNÓSTICO CLAVE -->
+          <div class="p-3 rounded-xl bg-slate-950/70 border border-slate-800 text-xs space-y-1.5">
+            <div class="flex items-center justify-between">
+              <span class="text-emerald-400 font-semibold">Ventaja Competitiva:</span>
+              <span class="text-[10px] text-slate-400 font-mono">Gastos fijos bajos</span>
+            </div>
+            <p class="text-slate-300 leading-relaxed text-[11px]">
+              Tus costos fijos básicos (Alquiler S/ 200 + Servicios S/ 37 + Spotify S/ 15) suman solo <strong class="text-white">S/ 252 al mes</strong> (~26% de tu sueldo base). Con tu deuda saldada, tienes más del <strong class="text-emerald-400">55% libre</strong> para crecer.
+            </p>
+          </div>
+        </div>
+
+        <!-- ESTRATEGIA DE ASIGNACIÓN SUGERIDA -->
+        <div class="rounded-2xl bg-slate-900/80 border border-slate-800/80 p-4 space-y-3">
+          <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center justify-between">
+            <span>Distribución de tu Capital Libre</span>
+            <span class="text-emerald-400 font-mono" x-text="`S/ ${formatNumber(netFreeCapital)}`"></span>
+          </h3>
+
+          <div class="space-y-2.5">
+            <!-- 1. Fondo de Emergencia -->
+            <div class="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1.5">
+              <div class="flex items-center justify-between text-xs">
+                <span class="font-bold text-cyan-400">1. Fondo de Reserva Líquido (35%)</span>
+                <span class="font-mono font-bold text-white" x-text="`S/ ${formatNumber(netFreeCapital * 0.35)}`"></span>
+              </div>
+              <p class="text-[11px] text-slate-400 leading-tight">
+                <strong>Meta:</strong> S/ 1,000 (cubre 4 meses de tus gastos fijos).
+              </p>
+              <div class="text-[10px] text-slate-500 bg-slate-900 p-1.5 rounded-lg border border-slate-800">
+                💡 <em>Dónde ponerlo en Perú:</em> Cuentas de alto rendimiento con FSD (Agora Ahorros 6%, Banco Pichincha o Caja Huancayo/Caja Arequipa).
+              </div>
+            </div>
+
+            <!-- 2. Re-inversión en Habilidades y Equipamiento -->
+            <div class="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1.5">
+              <div class="flex items-center justify-between text-xs">
+                <span class="font-bold text-emerald-400">2. Inversión en Producción (35%)</span>
+                <span class="font-mono font-bold text-white" x-text="`S/ ${formatNumber(netFreeCapital * 0.35)}`"></span>
+              </div>
+              <p class="text-[11px] text-slate-400 leading-tight">
+                <strong>Alto Retorno:</strong> Herramientas para tus servicios de tecnología, desarrollo web y edición.
+              </p>
+              <div class="text-[10px] text-slate-500 bg-slate-900 p-1.5 rounded-lg border border-slate-800">
+                💡 <em>Impacto:</em> Cada cliente extra de desarrollo o soporte te genera S/ 150 a S/ 400. Invertir en tu portafolio y licencias multiplica tus ingresos.
+              </div>
+            </div>
+
+            <!-- 3. Inversión Financiera Pasiva -->
+            <div class="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1.5">
+              <div class="flex items-center justify-between text-xs">
+                <span class="font-bold text-amber-400">3. Inversión a Largo Plazo (30%)</span>
+                <span class="font-mono font-bold text-white" x-text="`S/ ${formatNumber(netFreeCapital * 0.30)}`"></span>
+              </div>
+              <p class="text-[11px] text-slate-400 leading-tight">
+                <strong>Construcción de Riqueza:</strong> Pequeñas aportaciones periódicas en activos indexados.
+              </p>
+              <div class="text-[10px] text-slate-500 bg-slate-900 p-1.5 rounded-lg border border-slate-800">
+                💡 <em>Dónde ponerlo:</em> Apps reguladas para Perú como <strong>Trii</strong> (Bolsa de Valores de Lima / ETFs) o <strong>Hapi</strong> (ETFs S&P500 como VOO o VTI desde S/ 50 al mes).
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SIMULADOR INTERACTIVO DE INVERSIÓN -->
+        <div class="rounded-2xl bg-slate-900/80 border border-slate-800/80 p-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-bold text-white uppercase tracking-wider">Simulador a 12 Meses</h3>
+            <span class="text-[10px] text-emerald-400 font-mono font-semibold">+8% anual est.</span>
+          </div>
+
+          <div class="bg-slate-950/70 p-3 rounded-xl border border-slate-800 space-y-2">
+            <div class="flex justify-between text-xs">
+              <span class="text-slate-400">Inversión mensual simulada:</span>
+              <span class="font-bold font-mono text-cyan-400" x-text="`S/ ${formatNumber(Math.max(netFreeCapital * 0.5, 100))}`"></span>
+            </div>
+            <div class="flex justify-between text-xs">
+              <span class="text-slate-400">Capital acumulado en 1 año:</span>
+              <span class="font-bold font-mono text-emerald-400 text-sm" x-text="`S/ ${formatNumber((Math.max(netFreeCapital * 0.5, 100) * 12) * 1.04)}`"></span>
+            </div>
+            <p class="text-[10px] text-slate-500">
+              *Calculado asumiendo un rendimiento promedio en fondos indexados o depósitos a plazo fijo compuesto.
+            </p>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ================= PESTAÑA 5: AJUSTES Y RESPALDO ================= -->
+      <section x-show="activeTab === 'settings'" class="space-y-4" style="display: none;" x-transition.opacity>
+        
+        <!-- RESPALDO Y PORTABILIDAD -->
+        <div class="rounded-2xl bg-slate-900/80 border border-slate-800/80 p-4 space-y-3">
+          <h2 class="text-sm font-bold text-white flex items-center gap-2">
+            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
+            </svg>
+            Respaldo y Seguridad de Datos
+          </h2>
+          <p class="text-xs text-slate-400">
+            Tus datos se guardan automáticamente en la memoria interna de tu dispositivo (`localStorage`). Exporta un archivo `.json` para tener copia de seguridad física.
+          </p>
+
+          <div class="grid grid-cols-2 gap-2 pt-2">
+            <button 
+              @click="exportData()" 
+              class="py-2.5 px-3 rounded-xl bg-emerald-600/20 text-emerald-300 border border-emerald-500/40 text-xs font-semibold hover:bg-emerald-600/30 active:scale-95 transition flex items-center justify-center gap-1.5"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+              </svg>
+              Exportar JSON
+            </button>
+
+            <label class="py-2.5 px-3 rounded-xl bg-cyan-600/20 text-cyan-300 border border-cyan-500/40 text-xs font-semibold hover:bg-cyan-600/30 active:scale-95 transition flex items-center justify-center gap-1.5 cursor-pointer">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+              </svg>
+              Importar JSON
+              <input type="file" accept=".json" @change="importData($event)" class="hidden">
+            </label>
+          </div>
+        </div>
+
+        <!-- REINICIAR DATOS -->
+        <div class="rounded-2xl bg-slate-900/80 border border-slate-800/80 p-4 space-y-3">
+          <h3 class="text-xs font-bold text-slate-300">Restablecer Valores Iniciales</h3>
+          <p class="text-[11px] text-slate-400">
+            Restaura la configuración por defecto de CrisBeBe (Sueldo S/ 950, Gastos fijos precargados).
+          </p>
+          <button 
+            @click="resetToDefaults()" 
+            class="w-full py-2 px-3 rounded-xl bg-rose-950/40 border border-rose-800/50 text-rose-300 hover:text-rose-200 text-xs font-semibold active:scale-95 transition"
+          >
+            Restablecer a Valores por Defecto
+          </button>
+        </div>
+
+        <!-- GUÍA DE DESPLIEGUE RÁPIDO VERCEL / GITHUB -->
+        <div class="rounded-2xl bg-slate-900/80 border border-cyan-800/40 p-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-cyan-400">Despliegue GitHub & Vercel</span>
+            <span class="text-[10px] text-slate-400 font-mono">100% Gratis</span>
+          </div>
+          <ol class="text-[11px] text-slate-300 space-y-2 list-decimal list-inside leading-relaxed">
+            <li>Crea un repositorio en GitHub llamado <code class="text-cyan-300 bg-slate-950 px-1 py-0.5 rounded">securaq-finanzas</code>.</li>
+            <li>Sube este archivo renombrado como <code class="text-cyan-300 bg-slate-950 px-1 py-0.5 rounded">index.html</code>.</li>
+            <li>Entra a <strong>Vercel.com</strong>, importa el repositorio y haz clic en <strong>Deploy</strong>.</li>
+            <li>¡Listo! Abre el link desde Chrome en tu teléfono y selecciona <em>"Agregar a la pantalla de inicio"</em> para tenerla como app nativa.</li>
+          </ol>
+        </div>
+
+      </section>
+
+    </main>
+
+    <!-- ================= BOTTOM NAVIGATION BAR (THUMB FRIENDLY) ================= -->
+    <nav class="fixed bottom-0 max-w-md w-full bg-slate-950/95 backdrop-blur-lg border-t border-slate-800/80 px-2 py-2 pb-safe z-40 flex items-center justify-around">
+      
+      <!-- Tab 1: Dashboard -->
+      <button 
+        @click="activeTab = 'dashboard'" 
+        class="flex flex-col items-center justify-center flex-1 py-1 transition relative"
+        :class="activeTab === 'dashboard' ? 'text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200'"
+      >
+        <svg class="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+        </svg>
+        <span class="text-[10px]">Inicio</span>
+        <div x-show="activeTab === 'dashboard'" class="w-1 h-1 rounded-full bg-emerald-400 absolute bottom-0"></div>
+      </button>
+
+      <!-- Tab 2: Ingresos -->
+      <button 
+        @click="activeTab === 'incomes'" 
+        class="flex flex-col items-center justify-center flex-1 py-1 transition relative"
+        :class="activeTab === 'incomes' ? 'text-cyan-400 font-bold' : 'text-slate-400 hover:text-slate-200'"
+      >
+        <svg class="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <span class="text-[10px]">Ingresos</span>
+        <div x-show="activeTab === 'incomes'" class="w-1 h-1 rounded-full bg-cyan-400 absolute bottom-0"></div>
+      </button>
+
+      <!-- Tab 3: Gastos -->
+      <button 
+        @click="activeTab === 'expenses'" 
+        class="flex flex-col items-center justify-center flex-1 py-1 transition relative"
+        :class="activeTab === 'expenses' ? 'text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'"
+      >
+        <svg class="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <span class="text-[10px]">Gastos</span>
+        <div x-show="activeTab === 'expenses'" class="w-1 h-1 rounded-full bg-amber-400 absolute bottom-0"></div>
+      </button>
+
+      <!-- Tab 4: Asesor -->
+      <button 
+        @click="activeTab === 'advisor'" 
+        class="flex flex-col items-center justify-center flex-1 py-1 transition relative"
+        :class="activeTab === 'advisor' ? 'text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200'"
+      >
+        <svg class="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+        </svg>
+        <span class="text-[10px]">Asesor IA</span>
+        <div x-show="activeTab === 'advisor'" class="w-1 h-1 rounded-full bg-emerald-400 absolute bottom-0"></div>
+      </button>
+
+      <!-- Tab 5: Ajustes -->
+      <button 
+        @click="activeTab === 'settings'" 
+        class="flex flex-col items-center justify-center flex-1 py-1 transition relative"
+        :class="activeTab === 'settings' ? 'text-purple-400 font-bold' : 'text-slate-400 hover:text-slate-200'"
+      >
+        <svg class="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+        </svg>
+        <span class="text-[10px]">Ajustes</span>
+        <div x-show="activeTab === 'settings'" class="w-1 h-1 rounded-full bg-purple-400 absolute bottom-0"></div>
+      </button>
+
+    </nav>
+
+
+    <!-- ================= MODALES FLOTANTES (BOTTOM SHEETS) ================= -->
+
+    <!-- MODAL 1: REGISTRAR GASTO DIARIO RÁPIDO -->
+    <div 
+      x-show="modals.quickDaily" 
+      class="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/80 backdrop-blur-sm"
+      x-transition:enter="transition ease-out duration-300"
+      x-transition:enter-start="opacity-0"
+      x-transition:enter-end="opacity-100"
+      x-transition:leave="transition ease-in duration-200"
+      x-transition:leave-start="opacity-100"
+      x-transition:leave-end="opacity-0"
+      style="display: none;"
+    >
+      <div 
+        @click.away="closeModals()" 
+        class="w-full max-w-md bg-slate-900 border-t border-slate-800 rounded-t-3xl p-5 space-y-4 pb-safe shadow-2xl"
+      >
+        <div class="w-12 h-1.5 bg-slate-700 rounded-full mx-auto"></div>
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-bold text-white">Registrar Gasto Diario / Bolsillo</h3>
+          <button @click="closeModals()" class="text-slate-400 hover:text-white text-xs">Cerrar</button>
+        </div>
+
+        <form @submit.prevent="addDailyExpense()" class="space-y-3">
+          <div>
+            <label class="block text-[11px] text-slate-400 mb-1">Concepto o Descripción</label>
+            <input 
+              type="text" 
+              x-model="forms.daily.title" 
+              required 
+              placeholder="Ej. Almuerzo, Pasaje taxi, Café..." 
+              class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-400"
+            >
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[11px] text-slate-400 mb-1">Monto en Soles (S/)</label>
+              <input 
+                type="number" 
+                step="0.5" 
+                x-model.number="forms.daily.amount" 
+                required 
+                placeholder="10.00" 
+                class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono font-bold text-white focus:outline-none focus:border-rose-400"
+              >
+            </div>
+            <div>
+              <label class="block text-[11px] text-slate-400 mb-1">Categoría</label>
+              <select 
+                x-model="forms.daily.category" 
+                class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-400"
+              >
+                <option value="Alimentación">Alimentación</option>
+                <option value="Transporte">Transporte</option>
+                <option value="Gustos">Gustos / Antojos</option>
+                <option value="Salud">Salud / Farmacia</option>
+                <option value="Imprevistos">Imprevistos</option>
+              </select>
+            </div>
+          </div>
+
+          <button 
+            type="submit" 
+            class="w-full py-3 rounded-xl bg-gradient-to-r from-rose-500 to-amber-500 text-white font-bold text-xs shadow-lg shadow-rose-500/20 active:scale-95 transition"
+          >
+            Guardar Gasto
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL 2: AGREGAR INGRESO EXTERNO -->
+    <div 
+      x-show="modals.quickIncome" 
+      class="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/80 backdrop-blur-sm"
+      x-transition:enter="transition ease-out duration-300"
+      x-transition:enter-start="opacity-0"
+      x-transition:enter-end="opacity-100"
+      x-transition:leave="transition ease-in duration-200"
+      x-transition:leave-start="opacity-100"
+      x-transition:leave-end="opacity-0"
+      style="display: none;"
+    >
+      <div 
+        @click.away="closeModals()" 
+        class="w-full max-w-md bg-slate-900 border-t border-slate-800 rounded-t-3xl p-5 space-y-4 pb-safe shadow-2xl"
+      >
+        <div class="w-12 h-1.5 bg-slate-700 rounded-full mx-auto"></div>
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-bold text-white">Nuevo Ingreso Externo / Freelance</h3>
+          <button @click="closeModals()" class="text-slate-400 hover:text-white text-xs">Cerrar</button>
+        </div>
+
+        <form @submit.prevent="addExternalIncome()" class="space-y-3">
+          <div>
+            <label class="block text-[11px] text-slate-400 mb-1">Detalle del Servicio o Trabajo</label>
+            <input 
+              type="text" 
+              x-model="forms.income.title" 
+              required 
+              placeholder="Ej. Página Web landing, Soporte PC, Edición video..." 
+              class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-400"
+            >
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[11px] text-slate-400 mb-1">Monto en Soles (S/)</label>
+              <input 
+                type="number" 
+                step="5" 
+                x-model.number="forms.income.amount" 
+                required 
+                placeholder="150" 
+                class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono font-bold text-white focus:outline-none focus:border-emerald-400"
+              >
+            </div>
+            <div>
+              <label class="block text-[11px] text-slate-400 mb-1">Área / Rubro</label>
+              <select 
+                x-model="forms.income.category" 
+                class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-400"
+              >
+                <option value="Desarrollo Web">Desarrollo Web</option>
+                <option value="Soporte Técnico">Soporte Técnico</option>
+                <option value="Edición & Media">Edición & Media</option>
+                <option value="Ventas">Ventas Extras</option>
+                <option value="Otro">Otro Ingreso</option>
+              </select>
+            </div>
+          </div>
+
+          <button 
+            type="submit" 
+            class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 active:scale-95 transition"
+          >
+            Registrar Ingreso
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL 3: AGREGAR GASTO FIJO -->
+    <div 
+      x-show="modals.quickFixed" 
+      class="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/80 backdrop-blur-sm"
+      x-transition:enter="transition ease-out duration-300"
+      x-transition:enter-start="opacity-0"
+      x-transition:enter-end="opacity-100"
+      x-transition:leave="transition ease-in duration-200"
+      x-transition:leave-start="opacity-100"
+      x-transition:leave-end="opacity-0"
+      style="display: none;"
+    >
+      <div 
+        @click.away="closeModals()" 
+        class="w-full max-w-md bg-slate-900 border-t border-slate-800 rounded-t-3xl p-5 space-y-4 pb-safe shadow-2xl"
+      >
+        <div class="w-12 h-1.5 bg-slate-700 rounded-full mx-auto"></div>
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-bold text-white">Añadir Nueva Obligación Fija</h3>
+          <button @click="closeModals()" class="text-slate-400 hover:text-white text-xs">Cerrar</button>
+        </div>
+
+        <form @submit.prevent="addFixedExpense()" class="space-y-3">
+          <div>
+            <label class="block text-[11px] text-slate-400 mb-1">Nombre del Gasto Fijo</label>
+            <input 
+              type="text" 
+              x-model="forms.fixed.title" 
+              required 
+              placeholder="Ej. Plan celular, Internet, Gimnasio..." 
+              class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400"
+            >
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[11px] text-slate-400 mb-1">Monto Mensual (S/)</label>
+              <input 
+                type="number" 
+                step="1" 
+                x-model.number="forms.fixed.amount" 
+                required 
+                placeholder="50" 
+                class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono font-bold text-white focus:outline-none focus:border-amber-400"
+              >
+            </div>
+            <div>
+              <label class="block text-[11px] text-slate-400 mb-1">Día de Pago</label>
+              <input 
+                type="text" 
+                x-model="forms.fixed.dueDate" 
+                placeholder="Ej. Día 15" 
+                class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400"
+              >
+            </div>
+          </div>
+
+          <button 
+            type="submit" 
+            class="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/20 active:scale-95 transition"
+          >
+            Añadir a Fijos
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL 4: GUÍA DETALLADA GITHUB Y VERCEL -->
+    <div 
+      x-show="showDeployModal" 
+      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm"
+      style="display: none;"
+    >
+      <div 
+        @click.away="showDeployModal = false" 
+        class="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-2xl max-h-[85vh] overflow-y-auto"
+      >
+        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+          <h3 class="text-sm font-bold text-white">🚀 Despliegue en Vercel (CrisBeBe)</h3>
+          <button @click="showDeployModal = false" class="text-slate-400 hover:text-white text-xs">✕</button>
+        </div>
+
+        <div class="text-xs text-slate-300 space-y-3 leading-relaxed">
+          <p>
+            Esta aplicación está diseñada como <strong>Single Page App (SPA) autocontenida</strong>. No necesita Node.js ni compilación en el servidor:
+          </p>
+
+          <div class="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-2">
+            <span class="text-cyan-400 font-bold text-[11px]">Pasos en tu terminal o GitHub:</span>
+            <pre class="text-[10px] font-mono text-emerald-400 overflow-x-auto">git init
+git add index.html
+git commit -m "feat: SecuraQ Finanzas Mobile PWA"
+git branch -M main
+git remote add origin https://github.com/CrisBeBe/securaq-finanzas.git
+git push -u origin main</pre>
+          </div>
+
+          <p class="text-[11px] text-slate-400">
+            Luego ve a <strong class="text-white">vercel.com</strong>, pulsa <strong>"Add New Project"</strong>, selecciona el repositorio y presiona <strong>"Deploy"</strong>. En 10 segundos tendrás tu URL pública HTTPS.
+          </p>
+        </div>
+
+        <button 
+          @click="showDeployModal = false" 
+          class="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs transition"
+        >
+          Entendido
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- JAVASCRIPT DE REACTIVIDAD Y PERSISTENCIA (ALPINE.JS DATA) -->
+  <script>
+    function securaqApp() {
+      return {
+        activeTab: 'dashboard',
+        expenseSubTab: 'fixed',
+        showDeployModal: false,
+        toast: { visible: false, message: '', type: 'success' },
+
+        modals: {
+          quickDaily: false,
+          quickIncome: false,
+          quickFixed: false,
+        },
+
+        forms: {
+          daily: { title: '', amount: null, category: 'Alimentación' },
+          income: { title: '', amount: null, category: 'Desarrollo Web' },
+          fixed: { title: '', amount: null, dueDate: 'Día 15', category: 'General' },
+        },
+
+        // Modelo de Datos Principal
+        userData: {
+          owner: 'CrisBeBe',
+          baseSalary: 950,
+          currency: 'S/'
+        },
+
+        externalIncomes: [
+          { id: 1, title: 'Mantenimiento y Soporte TI', amount: 120, date: '08 Nov', category: 'Soporte Técnico' },
+          { id: 2, title: 'Landing Page Freelance', amount: 250, date: '14 Nov', category: 'Desarrollo Web' },
+        ],
+
+        fixedExpenses: [
+          { id: 1, title: 'Alquiler de casa', amount: 200, paid: true, dueDate: '05 de cada mes', category: 'Vivienda', isPaidOff: false },
+          { id: 2, title: 'Préstamo personal', amount: 104, paid: true, dueDate: '10 de cada mes', category: 'Deuda', isPaidOff: true },
+          { id: 3, title: 'Agua y Luz', amount: 37, paid: false, dueDate: '18 de cada mes', category: 'Servicios Básicos', isPaidOff: false },
+          { id: 4, title: 'Spotify', amount: 15, paid: true, dueDate: '25 de cada mes', category: 'Suscripción', isPaidOff: false },
+        ],
+
+        dailyExpenses: [
+          { id: 1, title: 'Menú Almuerzo', amount: 12, date: '15 Nov', category: 'Alimentación' },
+          { id: 2, title: 'Pasajes combi/colectivo', amount: 6, date: '15 Nov', category: 'Transporte' },
+        ],
+
+        // Inicialización y Carga de LocalStorage
+        initApp() {
+          const savedData = localStorage.getItem('securaq_finanzas_db_v1');
+          if (savedData) {
+            try {
+              const parsed = JSON.parse(savedData);
+              if (parsed.userData) this.userData = parsed.userData;
+              if (parsed.externalIncomes) this.externalIncomes = parsed.externalIncomes;
+              if (parsed.fixedExpenses) this.fixedExpenses = parsed.fixedExpenses;
+              if (parsed.dailyExpenses) this.dailyExpenses = parsed.dailyExpenses;
+            } catch (e) {
+              console.error("Error al cargar localStorage:", e);
+            }
+          }
+        },
+
+        // Persistencia Automática
+        saveData() {
+          const payload = {
+            userData: this.userData,
+            externalIncomes: this.externalIncomes,
+            fixedExpenses: this.fixedExpenses,
+            dailyExpenses: this.dailyExpenses,
+            updatedAt: new Date().toISOString()
+          };
+          localStorage.setItem('securaq_finanzas_db_v1', JSON.stringify(payload));
+        },
+
+        // Getters Computados en Tiempo Real
+        get totalExternalIncomes() {
+          return this.externalIncomes.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
+        },
+
+        get totalIncome() {
+          return (Number(this.userData.baseSalary) || 0) + this.totalExternalIncomes;
+        },
+
+        get totalFixedExpenses() {
+          // Solo suma los gastos que no estén saldados
+          return this.fixedExpenses
+            .filter(e => !e.isPaidOff)
+            .reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
+        },
+
+        get totalDailyExpenses() {
+          return this.dailyExpenses.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
+        },
+
+        get totalAllExpenses() {
+          return this.totalFixedExpenses + this.totalDailyExpenses;
+        },
+
+        get netFreeCapital() {
+          return Math.max(this.totalIncome - this.totalAllExpenses, 0);
+        },
+
+        get savingsRate() {
+          if (!this.totalIncome) return 0;
+          return (this.netFreeCapital / this.totalIncome) * 100;
+        },
+
+        // Métodos de Control
+        formatNumber(num) {
+          if (num === undefined || num === null || isNaN(num)) return '0.00';
+          return Number(num).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        },
+
+        showToast(msg, type = 'success') {
+          this.toast = { visible: true, message: msg, type };
+          setTimeout(() => { this.toast.visible = false; }, 2600);
+        },
+
+        openModal(name) {
+          this.modals[name] = true;
+        },
+
+        closeModals() {
+          this.modals.quickDaily = false;
+          this.modals.quickIncome = false;
+          this.modals.quickFixed = false;
+        },
+
+        // CRUD: Gastos Diarios
+        addDailyExpense() {
+          if (!this.forms.daily.title || !this.forms.daily.amount) return;
+          const today = new Date();
+          const dateStr = today.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
+          
+          this.dailyExpenses.unshift({
+            id: Date.now(),
+            title: this.forms.daily.title,
+            amount: Number(this.forms.daily.amount),
+            category: this.forms.daily.category,
+            date: dateStr
+          });
+
+          this.forms.daily = { title: '', amount: null, category: 'Alimentación' };
+          this.closeModals();
+          this.saveData();
+          this.showToast('Gasto diario registrado');
+        },
+
+        deleteDailyExpense(idx) {
+          this.dailyExpenses.splice(idx, 1);
+          this.saveData();
+          this.showToast('Gasto eliminado');
+        },
+
+        // CRUD: Ingresos Externos
+        addExternalIncome() {
+          if (!this.forms.income.title || !this.forms.income.amount) return;
+          const today = new Date();
+          const dateStr = today.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
+
+          this.externalIncomes.unshift({
+            id: Date.now(),
+            title: this.forms.income.title,
+            amount: Number(this.forms.income.amount),
+            category: this.forms.income.category,
+            date: dateStr
+          });
+
+          this.forms.income = { title: '', amount: null, category: 'Desarrollo Web' };
+          this.closeModals();
+          this.saveData();
+          this.showToast('Ingreso extra añadido');
+        },
+
+        deleteExternalIncome(idx) {
+          this.externalIncomes.splice(idx, 1);
+          this.saveData();
+          this.showToast('Ingreso eliminado');
+        },
+
+        // CRUD: Gastos Fijos
+        addFixedExpense() {
+          if (!this.forms.fixed.title || !this.forms.fixed.amount) return;
+          this.fixedExpenses.push({
+            id: Date.now(),
+            title: this.forms.fixed.title,
+            amount: Number(this.forms.fixed.amount),
+            dueDate: this.forms.fixed.dueDate || 'Día 15',
+            category: 'Obligación',
+            paid: false,
+            isPaidOff: false
+          });
+
+          this.forms.fixed = { title: '', amount: null, dueDate: 'Día 15', category: 'General' };
+          this.closeModals();
+          this.saveData();
+          this.showToast('Gasto fijo agregado');
+        },
+
+        toggleFixedPaid(idx) {
+          this.fixedExpenses[idx].paid = !this.fixedExpenses[idx].paid;
+          this.saveData();
+        },
+
+        deleteFixedExpense(idx) {
+          this.fixedExpenses.splice(idx, 1);
+          this.saveData();
+          this.showToast('Obligación eliminada');
+        },
+
+        // Exportar e Importar JSON
+        exportData() {
+          const payload = {
+            version: '1.0',
+            exportedAt: new Date().toISOString(),
+            userData: this.userData,
+            externalIncomes: this.externalIncomes,
+            fixedExpenses: this.fixedExpenses,
+            dailyExpenses: this.dailyExpenses
+          };
+
+          const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(payload, null, 2));
+          const downloadAnchor = document.createElement('a');
+          downloadAnchor.setAttribute("href", dataStr);
+          downloadAnchor.setAttribute("download", `securaq_finanzas_${this.userData.owner}_respaldo.json`);
+          document.body.appendChild(downloadAnchor);
+          downloadAnchor.click();
+          downloadAnchor.remove();
+          this.showToast('Respaldo descargado con éxito');
+        },
+
+        importData(event) {
+          const file = event.target.files[0];
+          if (!file) return;
+
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            try {
+              const imported = JSON.parse(e.target.result);
+              if (imported.userData) this.userData = imported.userData;
+              if (imported.externalIncomes) this.externalIncomes = imported.externalIncomes;
+              if (imported.fixedExpenses) this.fixedExpenses = imported.fixedExpenses;
+              if (imported.dailyExpenses) this.dailyExpenses = imported.dailyExpenses;
+              this.saveData();
+              this.showToast('¡Datos restaurados correctamente!');
+            } catch (err) {
+              alert('Error al leer el archivo JSON de respaldo.');
+            }
+          };
+          reader.readAsText(file);
+        },
+
+        resetToDefaults() {
+          if (!confirm('¿Seguro que deseas restablecer los datos por defecto de CrisBeBe?')) return;
+          localStorage.removeItem('securaq_finanzas_db_v1');
+          this.userData.baseSalary = 950;
+          this.externalIncomes = [
+            { id: 1, title: 'Mantenimiento y Soporte TI', amount: 120, date: '08 Nov', category: 'Soporte Técnico' },
+            { id: 2, title: 'Landing Page Freelance', amount: 250, date: '14 Nov', category: 'Desarrollo Web' },
+          ];
+          this.fixedExpenses = [
+            { id: 1, title: 'Alquiler de casa', amount: 200, paid: true, dueDate: '05 de cada mes', category: 'Vivienda', isPaidOff: false },
+            { id: 2, title: 'Préstamo personal', amount: 104, paid: true, dueDate: '10 de cada mes', category: 'Deuda', isPaidOff: true },
+            { id: 3, title: 'Agua y Luz', amount: 37, paid: false, dueDate: '18 de cada mes', category: 'Servicios Básicos', isPaidOff: false },
+            { id: 4, title: 'Spotify', amount: 15, paid: true, dueDate: '25 de cada mes', category: 'Suscripción', isPaidOff: false },
+          ];
+          this.dailyExpenses = [
+            { id: 1, title: 'Menú Almuerzo', amount: 12, date: '15 Nov', category: 'Alimentación' },
+            { id: 2, title: 'Pasajes combi/colectivo', amount: 6, date: '15 Nov', category: 'Transporte' },
+          ];
+          this.saveData();
+          this.showToast('Valores restaurados por defecto');
+        }
+      }
+    }
+  </script>
+</body>
+</html>
