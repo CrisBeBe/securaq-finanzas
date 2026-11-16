@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#020617"/>
+      <stop offset="50%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#020617"/>
+    </linearGradient>
+    <linearGradient id="shield" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="50%" stop-color="#06b6d4"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="128" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="128" fill="none" stroke="#1e293b" stroke-width="8"/>
+  <path d="M256 96 L376 144 V264 C376 348 256 416 256 416 C256 416 136 348 136 264 V144 Z" fill="none" stroke="url(#shield)" stroke-width="24" stroke-linejoin="round"/>
+  <!-- Simbolo S/ -->
+  <text x="256" y="295" font-family="Inter, system-ui, sans-serif" font-size="140" font-weight="900" fill="#ffffff" text-anchor="middle" dominant-baseline="middle">S/</text>
+</svg>

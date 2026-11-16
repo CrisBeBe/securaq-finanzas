@@ -6,18 +6,20 @@
   <title>SecuraQ Finanzas | CrisBeBe</title>
   
   <!-- Metadatos PWA y Móvil -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="SecuraQ">
   <meta name="theme-color" content="#020617">
-  <meta name="description" content="Sistema de finanzas personales reales para CrisBeBe">
+  <meta name="description" content="Sistema financiero personal móvil de CrisBeBe para control de sueldo, quincenas e inversión">
 
-  <!-- Tipografía Google Inter -->
+  <!-- Tipografía Google Inter & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
 
-  <!-- Tailwind CSS CDN -->
+  <!-- Tailwind CSS CDN con Fallback Local Estilizado -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -33,65 +35,85 @@
     }
   </script>
 
-  <!-- LÓGICA DE DATOS ANTES DE CARGAR ALPINE (GARANTIZA EJECUCIÓN INMEDIATA SIN ERRORES) -->
+  <!-- LÓGICA FINANCIERA PRINCIPAL PRE-CARGADA (DATOS 100% REALES DE CRISBEBE) -->
   <script>
-    // Inicializador de la aplicación financiera con datos 100% REALES de CrisBeBe
-    function initSecuraqData() {
+    function initSecuraqApp() {
       return {
         activeTab: 'dashboard',
         expenseSubTab: 'fixed',
         showDeployModal: false,
+        deferredPrompt: null,
+        canInstall: false,
         toast: { visible: false, message: '', type: 'success' },
 
+        // Modales
         modals: {
           quickDaily: false,
           quickIncome: false,
           quickFixed: false,
-          editSalary: false
+          editSalary: false,
         },
 
+        // Formularios
         forms: {
           daily: { title: '', amount: '', category: 'Alimentación' },
           income: { title: '', amount: '', category: 'Desarrollo Web' },
           fixed: { title: '', amount: '', dueDate: 'Día 15', category: 'General' },
+          tempSalary: 950
         },
 
-        // DATOS REALES DE CRISBEBE (Sin datos ficticios)
+        // Simulador de Inversión
+        simulatorAmount: 250,
+
+        // ================= DATOS REALES DE CRISBEBE =================
         userData: {
           owner: 'CrisBeBe',
           baseSalary: 950,
           currency: 'S/'
         },
 
-        // Ingresos externos empiezan en 0 (vacíos para que agregues tus trabajos reales)
+        // Ingresos externos empiezan limpios en 0
         externalIncomes: [],
 
-        // Gastos fijos reales configurados
+        // Gastos fijos reales configurados por el usuario
         fixedExpenses: [
           { id: 1, title: 'Alquiler de casa', amount: 200, paid: true, dueDate: '05 de cada mes', category: 'Vivienda', isPaidOff: false },
           { id: 2, title: 'Préstamo personal (Saldado)', amount: 104, paid: true, dueDate: '10 de cada mes', category: 'Deuda', isPaidOff: true },
-          { id: 3, title: 'Agua y Luz', amount: 37, paid: false, dueDate: '18 de cada mes', category: 'Servicios', isPaidOff: false },
+          { id: 3, title: 'Agua y Luz', amount: 37, paid: false, dueDate: '18 de cada mes', category: 'Servicios Básicos', isPaidOff: false },
           { id: 4, title: 'Spotify', amount: 15, paid: true, dueDate: '25 de cada mes', category: 'Suscripción', isPaidOff: false }
         ],
 
-        // Gastos diarios empiezan en 0 (sin registros falsos de pasajes ni almuerzos inventados)
+        // Gastos diarios empiezan limpios en 0
         dailyExpenses: [],
 
         init() {
-          // Cargar desde LocalStorage versión limpia
-          const saved = localStorage.getItem('securaq_finanzas_v2_real');
-          if (saved) {
+          // Captura de evento de instalación PWA
+          window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            this.deferredPrompt = e;
+            this.canInstall = true;
+          });
+
+          // Cargar datos persistidos reales
+          const stored = localStorage.getItem('securaq_finanzas_v3_crisbebe');
+          if (stored) {
             try {
-              const parsed = JSON.parse(saved);
-              if (parsed.userData && parsed.userData.baseSalary) this.userData = parsed.userData;
-              if (Array.isArray(parsed.externalIncomes)) this.externalIncomes = parsed.externalIncomes;
-              if (Array.isArray(parsed.fixedExpenses)) this.fixedExpenses = parsed.fixedExpenses;
-              if (Array.isArray(parsed.dailyExpenses)) this.dailyExpenses = parsed.dailyExpenses;
-            } catch (e) {
-              console.warn('Iniciando con datos frescos de CrisBeBe.');
+              const data = JSON.parse(stored);
+              if (data.userData && data.userData.baseSalary) this.userData = data.userData;
+              if (Array.isArray(data.externalIncomes)) this.externalIncomes = data.externalIncomes;
+              if (Array.isArray(data.fixedExpenses)) this.fixedExpenses = data.fixedExpenses;
+              if (Array.isArray(data.dailyExpenses)) this.dailyExpenses = data.dailyExpenses;
+            } catch (err) {
+              console.warn('Iniciando balance limpio de CrisBeBe.');
             }
           }
+          this.forms.tempSalary = this.userData.baseSalary;
           this.saveData();
+
+          // Registrar Service Worker para soporte PWA y modo Offline
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW Info:', err));
+          }
         },
 
         saveData() {
@@ -102,10 +124,10 @@
             dailyExpenses: this.dailyExpenses,
             updatedAt: new Date().toISOString()
           };
-          localStorage.setItem('securaq_finanzas_v2_real', JSON.stringify(payload));
+          localStorage.setItem('securaq_finanzas_v3_crisbebe', JSON.stringify(payload));
         },
 
-        // CÁLCULOS EN TIEMPO REAL
+        // CÁLCULOS DINÁMICOS
         get totalExternalIncomes() {
           return this.externalIncomes.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
         },
@@ -115,7 +137,7 @@
         },
 
         get totalFixedExpenses() {
-          // Solo suma los fijos ACTIVOS (el préstamo saldado no resta dinero)
+          // Solo suma los gastos fijos activos (no saldados)
           return this.fixedExpenses
             .filter(e => !e.isPaidOff)
             .reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
@@ -125,12 +147,12 @@
           return this.dailyExpenses.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
         },
 
-        get totalExpenses() {
+        get totalAllExpenses() {
           return this.totalFixedExpenses + this.totalDailyExpenses;
         },
 
         get netFreeCapital() {
-          return Math.max(this.totalIncome - this.totalExpenses, 0);
+          return Math.max(this.totalIncome - this.totalAllExpenses, 0);
         },
 
         get savingsRate() {
@@ -138,7 +160,34 @@
           return (this.netFreeCapital / this.totalIncome) * 100;
         },
 
-        // Formato moneda peruana
+        // Quincena Actual en Tiempo Real según fecha de hoy
+        get currentQuincenaInfo() {
+          const now = new Date();
+          const day = now.getDate();
+          const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+
+          if (day <= 15) {
+            return {
+              num: 1,
+              title: '1ra Quincena (1 al 15)',
+              daysLeft: 15 - day,
+              amount: this.userData.baseSalary / 2,
+              obligations: 'Alquiler (S/ 200) + Agua/Luz (S/ 37) = S/ 237',
+              freeEstimate: (this.userData.baseSalary / 2) - 237
+            };
+          } else {
+            return {
+              num: 2,
+              title: '2da Quincena (16 al fin de mes)',
+              daysLeft: lastDayOfMonth - day,
+              amount: this.userData.baseSalary / 2,
+              obligations: 'Spotify (S/ 15) + Ahorro/Inversión Fuerte',
+              freeEstimate: (this.userData.baseSalary / 2) - 15
+            };
+          }
+        },
+
+        // Formato Moneda Soles (S/)
         formatMoney(num) {
           const val = parseFloat(num) || 0;
           return val.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -146,7 +195,7 @@
 
         showToast(msg, type = 'success') {
           this.toast = { visible: true, message: msg, type };
-          setTimeout(() => { this.toast.visible = false; }, 2400);
+          setTimeout(() => { this.toast.visible = false; }, 2500);
         },
 
         openModal(name) {
@@ -160,7 +209,17 @@
           this.modals.editSalary = false;
         },
 
-        // MÉTODOS CRUD: Gastos Diarios Reales
+        // Actualizar Sueldo Base
+        updateSalary() {
+          if (this.forms.tempSalary && this.forms.tempSalary > 0) {
+            this.userData.baseSalary = parseFloat(this.forms.tempSalary);
+            this.saveData();
+            this.closeModals();
+            this.showToast('Sueldo base actualizado a S/ ' + this.formatMoney(this.userData.baseSalary));
+          }
+        },
+
+        // CRUD Gastos Diarios
         addDailyExpense() {
           if (!this.forms.daily.title || !this.forms.daily.amount) return;
           const today = new Date();
@@ -177,7 +236,7 @@
           this.forms.daily = { title: '', amount: '', category: 'Alimentación' };
           this.closeModals();
           this.saveData();
-          this.showToast('Gasto diario registrado');
+          this.showToast('Gasto registrado con éxito');
         },
 
         deleteDailyExpense(idx) {
@@ -186,7 +245,7 @@
           this.showToast('Gasto eliminado');
         },
 
-        // MÉTODOS CRUD: Ingresos Externos
+        // CRUD Ingresos Externos
         addExternalIncome() {
           if (!this.forms.income.title || !this.forms.income.amount) return;
           const today = new Date();
@@ -212,7 +271,7 @@
           this.showToast('Ingreso eliminado');
         },
 
-        // MÉTODOS CRUD: Gastos Fijos
+        // CRUD Gastos Fijos
         addFixedExpense() {
           if (!this.forms.fixed.title || !this.forms.fixed.amount) return;
 
@@ -229,7 +288,7 @@
           this.forms.fixed = { title: '', amount: '', dueDate: 'Día 15', category: 'General' };
           this.closeModals();
           this.saveData();
-          this.showToast('Nuevo gasto fijo agregado');
+          this.showToast('Gasto fijo agregado');
         },
 
         toggleFixedPaid(idx) {
@@ -246,14 +305,56 @@
         deleteFixedExpense(idx) {
           this.fixedExpenses.splice(idx, 1);
           this.saveData();
-          this.showToast('Gasto fijo eliminado');
+          this.showToast('Obligación eliminada');
         },
 
-        // Exportar e Importar Respaldo
-        exportBackup() {
+        // Copiar Reporte Financiero para WhatsApp
+        copyWhatsAppReport() {
+          const report = `📊 *REPORTE FINANCIERO - SECURAEQ*
+👤 *Usuario:* ${this.userData.owner}
+📅 *Fecha:* ${new Date().toLocaleDateString('es-PE')}
+
+💰 *Ingresos Totales:* S/ ${this.formatMoney(this.totalIncome)}
+  • Sueldo Base: S/ ${this.formatMoney(this.userData.baseSalary)}
+  • Ingresos Extras: S/ ${this.formatMoney(this.totalExternalIncomes)} (${this.externalIncomes.length} trabajos)
+
+📉 *Gastos Totales:* S/ ${this.formatMoney(this.totalAllExpenses)}
+  • Fijos Activos: S/ ${this.formatMoney(this.totalFixedExpenses)}
+  • Consumos Bolsillo: S/ ${this.formatMoney(this.totalDailyExpenses)}
+
+🚀 *CAPITAL LIBRE PARA INVERTIR:* S/ ${this.formatMoney(this.netFreeCapital)}
+📈 *Tasa de Ahorro/Inversión:* ${this.savingsRate.toFixed(1)}%
+
+_Generado con SecuraQ Finanzas PWA_`;
+
+          navigator.clipboard.writeText(report).then(() => {
+            this.showToast('¡Reporte copiado para pegar en WhatsApp!');
+          }).catch(() => {
+            alert(report);
+          });
+        },
+
+        // Instalar App PWA
+        installPWA() {
+          if (this.deferredPrompt) {
+            this.deferredPrompt.prompt();
+            this.deferredPrompt.userChoice.then((choiceResult) => {
+              if (choiceResult.outcome === 'accepted') {
+                this.showToast('¡Gracias por instalar SecuraQ!');
+              }
+              this.deferredPrompt = null;
+              this.canInstall = false;
+            });
+          } else {
+            alert('En tu celular, toca los 3 puntos de Chrome y presiona "Agregar a la pantalla principal".');
+          }
+        },
+
+        // Exportar e Importar JSON
+        exportJSON() {
           const payload = {
             owner: this.userData.owner,
-            version: '2.0-real',
+            version: '3.0-full-real',
             exportedAt: new Date().toISOString(),
             userData: this.userData,
             externalIncomes: this.externalIncomes,
@@ -267,10 +368,10 @@
           a.download = `securaq_finanzas_${this.userData.owner}_${new Date().toISOString().slice(0,10)}.json`;
           a.click();
           URL.revokeObjectURL(url);
-          this.showToast('Respaldo descargado correctamente');
+          this.showToast('Copia de seguridad descargada');
         },
 
-        importBackup(event) {
+        importJSON(event) {
           const file = event.target.files[0];
           if (!file) return;
           const reader = new FileReader();
@@ -281,47 +382,51 @@
               if (Array.isArray(data.externalIncomes)) this.externalIncomes = data.externalIncomes;
               if (Array.isArray(data.fixedExpenses)) this.fixedExpenses = data.fixedExpenses;
               if (Array.isArray(data.dailyExpenses)) this.dailyExpenses = data.dailyExpenses;
+              this.forms.tempSalary = this.userData.baseSalary;
               this.saveData();
-              this.showToast('¡Datos reales restaurados con éxito!');
+              this.showToast('¡Datos restaurados con éxito!');
             } catch (err) {
-              alert('Archivo JSON no válido.');
+              alert('El archivo no tiene un formato válido.');
             }
           };
           reader.readAsText(file);
         },
 
-        resetToCrisBeBeDefaults() {
+        resetToCleanBalance() {
           if (!confirm('¿Restablecer al balance inicial oficial de CrisBeBe?')) return;
-          localStorage.removeItem('securaq_finanzas_v2_real');
+          localStorage.removeItem('securaq_finanzas_v3_crisbebe');
           this.userData.baseSalary = 950;
           this.externalIncomes = [];
           this.dailyExpenses = [];
           this.fixedExpenses = [
             { id: 1, title: 'Alquiler de casa', amount: 200, paid: true, dueDate: '05 de cada mes', category: 'Vivienda', isPaidOff: false },
             { id: 2, title: 'Préstamo personal (Saldado)', amount: 104, paid: true, dueDate: '10 de cada mes', category: 'Deuda', isPaidOff: true },
-            { id: 3, title: 'Agua y Luz', amount: 37, paid: false, dueDate: '18 de cada mes', category: 'Servicios', isPaidOff: false },
+            { id: 3, title: 'Agua y Luz', amount: 37, paid: false, dueDate: '18 de cada mes', category: 'Servicios Básicos', isPaidOff: false },
             { id: 4, title: 'Spotify', amount: 15, paid: true, dueDate: '25 de cada mes', category: 'Suscripción', isPaidOff: false }
           ];
+          this.forms.tempSalary = 950;
           this.saveData();
-          this.showToast('Valores limpios restaurados');
+          this.showToast('Balance oficial restablecido');
         }
-      }
+      };
     }
 
-    // Registro en Alpine tanto directo como por evento
-    window.securaqApp = initSecuraqData;
+    // Registro seguro antes de cargar la librería
+    window.securaqApp = initSecuraqApp;
     document.addEventListener('alpine:init', () => {
-      Alpine.data('securaqApp', initSecuraqData);
+      Alpine.data('securaqApp', initSecuraqApp);
     });
   </script>
 
-  <!-- CARGA SEGURA DE ALPINE.JS -->
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js"></script>
+  <!-- CARGA CON FALLBACK AUTOMÁTICO DE ALPINE.JS -->
+  <script src="alpine.min.js" onerror="this.src='https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js'" defer></script>
 
   <style>
     body {
       -webkit-tap-highlight-color: transparent;
       user-select: none;
+      background-color: #020617;
+      color: #f8fafc;
     }
     input, textarea, select {
       user-select: auto;
@@ -332,15 +437,18 @@
     .pt-safe {
       padding-top: env(safe-area-inset-top, 0.75rem);
     }
-    .glow-green {
-      box-shadow: 0 0 25px -5px rgba(16, 185, 129, 0.2);
+    .glow-emerald {
+      box-shadow: 0 0 25px -5px rgba(16, 185, 129, 0.25);
+    }
+    .glow-cyan {
+      box-shadow: 0 0 25px -5px rgba(6, 182, 212, 0.2);
     }
   </style>
 </head>
 
 <body class="bg-slate-950 text-slate-100 min-h-screen antialiased flex justify-center font-sans">
 
-  <!-- CONTENEDOR PRINCIPAL MOBILE-FIRST -->
+  <!-- CONTENEDOR MAQUETADO MOBILE-FIRST -->
   <div 
     x-data="securaqApp()" 
     class="w-full max-w-md min-h-screen bg-slate-950 flex flex-col relative border-x border-slate-900 shadow-2xl"
@@ -357,16 +465,27 @@
         <div>
           <div class="flex items-center space-x-1.5">
             <h1 class="text-sm font-bold tracking-tight text-white">SecuraQ Finanzas</h1>
-            <span class="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/20">Real v2</span>
+            <span class="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/20">Oficial</span>
           </div>
           <p class="text-[11px] text-slate-400">Usuario: <span class="text-cyan-400 font-semibold" x-text="userData.owner">CrisBeBe</span></p>
         </div>
       </div>
 
       <div class="flex items-center space-x-2">
+        <!-- Botón Compartir WhatsApp -->
+        <button 
+          @click="copyWhatsAppReport()" 
+          title="Copiar balance para WhatsApp" 
+          class="p-2 rounded-xl bg-emerald-950/40 border border-emerald-800/50 text-emerald-400 hover:text-emerald-300 active:scale-95 transition"
+        >
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.664-.698c.969.586 1.761.882 2.796.882 3.183 0 5.769-2.587 5.77-5.766.001-3.187-2.575-5.77-5.77-5.769zm10.218 5.768c-.002 5.632-4.58 10.209-10.212 10.209-1.802 0-3.528-.474-5.06-1.373l-5.698 1.493 1.527-5.553c-1.022-1.602-1.564-3.468-1.565-5.385.002-5.632 4.58-10.209 10.212-10.209 5.632.001 10.208 4.577 10.208 10.209z"/>
+          </svg>
+        </button>
+
         <!-- Botón Exportar Respaldo -->
         <button 
-          @click="exportBackup()" 
+          @click="exportJSON()" 
           title="Descargar Respaldo JSON" 
           class="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white active:scale-95 transition"
         >
@@ -374,76 +493,65 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
           </svg>
         </button>
-
-        <!-- Botón Info Despliegue -->
-        <button 
-          @click="showDeployModal = true" 
-          title="Información de la App" 
-          class="p-2 rounded-xl bg-cyan-950/40 border border-cyan-800/50 text-cyan-400 hover:text-cyan-300 active:scale-95 transition"
-        >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-          </svg>
-        </button>
       </div>
     </header>
 
-    <!-- TOAST FLOTANTE -->
+    <!-- TOAST DE NOTIFICACIÓN FLOTANTE -->
     <div 
       x-show="toast.visible" 
       x-transition
-      class="fixed top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl text-xs font-semibold shadow-2xl flex items-center space-x-2 border bg-emerald-950/95 border-emerald-500/40 text-emerald-300"
+      class="fixed top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl text-xs font-semibold shadow-2xl flex items-center space-x-2 border bg-emerald-950/95 border-emerald-500/50 text-emerald-300"
       style="display: none;"
     >
       <span x-text="toast.message"></span>
     </div>
 
-    <!-- CUERPO PRINCIPAL CON SCROLL -->
+    <!-- CUERPO PRINCIPAL CON SCROLL FLUIDO -->
     <main class="flex-1 overflow-y-auto px-4 py-4 space-y-4 pb-28">
 
-      <!-- ================= 1. TAB: DASHBOARD (INICIO) ================= -->
+      <!-- ================= 1. PESTAÑA: INICIO (DASHBOARD) ================= -->
       <section x-show="activeTab === 'dashboard'" class="space-y-4">
 
-        <!-- TARJETA HERO: CAPITAL LIBRE REAL -->
-        <div class="relative overflow-hidden rounded-2xl bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border border-emerald-500/30 p-5 glow-green">
+        <!-- TARJETA HERO: CAPITAL LIBRE REAL PARA INVERTIR -->
+        <div class="relative overflow-hidden rounded-2xl bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border border-emerald-500/40 p-5 glow-emerald">
           <div class="flex items-center justify-between mb-1.5">
             <span class="text-xs font-medium text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
               Capital Libre para Invertir
             </span>
-            <span class="text-[11px] px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800/60 font-semibold font-mono" x-text="`${savingsRate.toFixed(1)}% neto`">
-              0% neto
+            <span class="text-[11px] px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800/80 font-bold font-mono" x-text="`${savingsRate.toFixed(1)}% neto`">
+              73.5% neto
             </span>
           </div>
 
           <div class="flex items-baseline space-x-2 my-2">
-            <span class="text-2xl font-bold text-emerald-400">S/</span>
+            <span class="text-2xl font-bold text-emerald-400 font-mono">S/</span>
             <span class="text-4xl font-extrabold tracking-tight text-white font-mono" x-text="formatMoney(netFreeCapital)">
               698.00
             </span>
           </div>
-          <p class="text-xs text-slate-400 mb-4">
-            Dinero limpio y disponible tras cubrir tus gastos fijos activos y consumos de bolsillo.
+          <p class="text-xs text-slate-400 mb-4 leading-relaxed">
+            Dinero limpio y disponible tras cubrir tus gastos fijos activos y compras de bolsillo.
           </p>
 
           <!-- MINI DESGLOSE 3 COLUMNAS -->
           <div class="grid grid-cols-3 gap-2 pt-3 border-t border-slate-800/80">
             <!-- Ingresos -->
-            <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-2.5 text-center">
+            <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-2.5 text-center">
               <div class="text-[10px] text-cyan-400 font-bold uppercase">Ingresos</div>
               <div class="text-xs font-bold text-white font-mono mt-0.5" x-text="`S/ ${formatMoney(totalIncome)}`">S/ 950.00</div>
               <div class="text-[9px] text-slate-500" x-text="`${externalIncomes.length} extras`">0 extras</div>
             </div>
 
             <!-- Fijos -->
-            <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-2.5 text-center">
+            <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-2.5 text-center">
               <div class="text-[10px] text-amber-400 font-bold uppercase">Fijos</div>
               <div class="text-xs font-bold text-white font-mono mt-0.5" x-text="`S/ ${formatMoney(totalFixedExpenses)}`">S/ 252.00</div>
               <div class="text-[9px] text-slate-500">3 activos</div>
             </div>
 
             <!-- Bolsillo -->
-            <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-2.5 text-center">
+            <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-2.5 text-center">
               <div class="text-[10px] text-rose-400 font-bold uppercase">Bolsillo</div>
               <div class="text-xs font-bold text-white font-mono mt-0.5" x-text="`S/ ${formatMoney(totalDailyExpenses)}`">S/ 0.00</div>
               <div class="text-[9px] text-slate-500" x-text="`${dailyExpenses.length} movs`">0 movs</div>
@@ -451,7 +559,7 @@
           </div>
         </div>
 
-        <!-- MÓDULO QUINCENAL (S/ 475 CADA UNA) -->
+        <!-- MÓDULO QUINCENAL INTELIGENTE (DETECCIÓN DE FECHA EN VIVO) -->
         <div class="rounded-2xl bg-slate-900/80 border border-slate-800/80 p-4 space-y-3">
           <div class="flex items-center justify-between">
             <div class="flex items-center space-x-2">
@@ -460,40 +568,24 @@
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                 </svg>
               </span>
-              <h2 class="text-sm font-bold text-white">Tus Quincenas (S/ 950)</h2>
+              <div>
+                <h2 class="text-sm font-bold text-white">Quincena en Curso</h2>
+                <p class="text-[10px] text-cyan-400" x-text="currentQuincenaInfo.title">1ra Quincena (1 al 15)</p>
+              </div>
             </div>
-            <span class="text-xs font-mono text-cyan-400 font-bold">S/ 475.00 c/u</span>
+            <span class="text-xs font-mono text-cyan-300 font-bold bg-cyan-950/60 px-2.5 py-1 rounded-lg border border-cyan-800/50">
+              S/ 475.00
+            </span>
           </div>
 
-          <div class="grid grid-cols-2 gap-2.5">
-            <!-- Quincena 1 -->
-            <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 space-y-1.5">
-              <div class="flex items-center justify-between text-xs">
-                <span class="font-bold text-slate-300">1ra Quincena (1-15)</span>
-                <span class="text-[10px] font-mono text-slate-400">Día 15</span>
-              </div>
-              <div class="text-base font-bold text-white font-mono">S/ 475.00</div>
-              <p class="text-[10px] text-slate-400 leading-tight">
-                Alquiler (S/ 200) + Agua y Luz (S/ 37) = S/ 237.
-              </p>
-              <div class="text-[11px] font-bold text-emerald-400 font-mono">
-                Libre: S/ 238.00
-              </div>
+          <div class="p-3 bg-slate-950/90 border border-slate-800 rounded-xl space-y-2">
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-slate-300 font-medium">Obligaciones a cubrir:</span>
+              <span class="text-amber-400 font-mono text-[11px]" x-text="currentQuincenaInfo.obligations">Alquiler (S/ 200) + Agua/Luz (S/ 37)</span>
             </div>
-
-            <!-- Quincena 2 -->
-            <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 space-y-1.5">
-              <div class="flex items-center justify-between text-xs">
-                <span class="font-bold text-slate-300">2da Quincena (16-30)</span>
-                <span class="text-[10px] font-mono text-slate-400">Fin de mes</span>
-              </div>
-              <div class="text-base font-bold text-white font-mono">S/ 475.00</div>
-              <p class="text-[10px] text-slate-400 leading-tight">
-                Spotify (S/ 15) + Ahorro e Inversión fuerte.
-              </p>
-              <div class="text-[11px] font-bold text-emerald-400 font-mono">
-                Libre: S/ 460.00
-              </div>
+            <div class="flex items-center justify-between text-xs pt-1 border-t border-slate-900">
+              <span class="text-slate-400">Disponible aproximado de la quincena:</span>
+              <span class="text-emerald-400 font-bold font-mono" x-text="`S/ ${formatMoney(currentQuincenaInfo.freeEstimate)}`">S/ 238.00</span>
             </div>
           </div>
         </div>
@@ -502,7 +594,7 @@
         <div class="grid grid-cols-2 gap-2.5">
           <button 
             @click="openModal('quickDaily')" 
-            class="flex items-center justify-center space-x-2 py-3.5 px-4 rounded-xl bg-gradient-to-r from-rose-500/20 to-amber-500/20 border border-rose-500/30 text-rose-300 hover:text-white font-bold text-xs active:scale-95 transition"
+            class="flex items-center justify-center space-x-2 py-3.5 px-4 rounded-xl bg-gradient-to-r from-rose-500/20 to-amber-500/20 border border-rose-500/30 text-rose-300 hover:text-white font-bold text-xs active:scale-95 transition shadow-lg shadow-rose-950/30"
           >
             <svg class="w-4 h-4 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/>
@@ -512,7 +604,7 @@
 
           <button 
             @click="openModal('quickIncome')" 
-            class="flex items-center justify-center space-x-2 py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 border border-emerald-500/30 text-emerald-300 hover:text-white font-bold text-xs active:scale-95 transition"
+            class="flex items-center justify-center space-x-2 py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 border border-emerald-500/30 text-emerald-300 hover:text-white font-bold text-xs active:scale-95 transition shadow-lg shadow-emerald-950/30"
           >
             <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/>
@@ -521,15 +613,16 @@
           </button>
         </div>
 
-        <!-- RESUMEN DE SALUD FINANCIERA -->
+        <!-- RESUMEN VISUAL DE DISTRIBUCIÓN -->
         <div class="rounded-2xl bg-slate-900/80 border border-slate-800/80 p-4 space-y-3">
           <div class="flex items-center justify-between text-xs">
-            <span class="font-bold text-white">Distribución de tu Dinero</span>
+            <span class="font-bold text-white">Semáforo de tu Dinero</span>
             <span class="px-2 py-0.5 rounded-full font-bold text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-              73.5% Libre
+              Excelente Salud Financiera
             </span>
           </div>
 
+          <!-- Barra de Progreso Tricolor -->
           <div class="w-full bg-slate-950 h-3 rounded-full overflow-hidden flex border border-slate-800">
             <div class="bg-amber-500 h-full" :style="`width: ${(totalFixedExpenses / totalIncome) * 100}%`" title="Fijos"></div>
             <div class="bg-rose-500 h-full" :style="`width: ${(totalDailyExpenses / totalIncome) * 100}%`" title="Bolsillo"></div>
@@ -545,38 +638,39 @@
 
       </section>
 
-      <!-- ================= 2. TAB: INGRESOS ================= -->
+      <!-- ================= 2. PESTAÑA: INGRESOS ================= -->
       <section x-show="activeTab === 'incomes'" class="space-y-4" style="display: none;">
         
         <!-- SUELDO BASE EDITABLE -->
-        <div class="rounded-2xl bg-slate-900/90 border border-cyan-500/30 p-4 space-y-3">
+        <div class="rounded-2xl bg-slate-900/90 border border-cyan-500/30 p-4 space-y-3 glow-cyan">
           <div class="flex items-center justify-between">
             <div>
               <h2 class="text-sm font-bold text-white">Sueldo Base Mensual</h2>
-              <p class="text-[11px] text-slate-400">Tu sueldo base actual de trabajo</p>
+              <p class="text-[11px] text-slate-400">Ingreso fijo recurrente de trabajo</p>
             </div>
-            <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800 font-mono font-bold">Base</span>
-          </div>
-
-          <div class="flex items-center space-x-2">
-            <span class="text-lg font-bold text-cyan-400 font-mono">S/</span>
-            <input 
-              type="number" 
-              step="10" 
-              x-model.number="userData.baseSalary" 
-              @input="saveData()"
-              class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xl font-bold font-mono text-white focus:outline-none focus:border-cyan-400 transition"
-              placeholder="950"
+            <button 
+              @click="openModal('editSalary')" 
+              class="px-2.5 py-1 rounded-lg bg-cyan-950 text-cyan-400 border border-cyan-800 text-xs font-semibold hover:bg-cyan-900 transition flex items-center gap-1"
             >
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+              </svg>
+              Editar
+            </button>
           </div>
 
-          <div class="flex justify-between items-center text-[11px] text-slate-400 pt-1 border-t border-slate-800/80">
-            <span>2 Quincenas de:</span>
-            <span class="font-mono text-cyan-300 font-bold" x-text="`S/ ${formatMoney(userData.baseSalary / 2)} c/u`">S/ 475.00 c/u</span>
+          <div class="flex items-baseline space-x-2">
+            <span class="text-xl font-bold text-cyan-400 font-mono">S/</span>
+            <span class="text-3xl font-extrabold text-white font-mono" x-text="formatMoney(userData.baseSalary)">950.00</span>
+          </div>
+
+          <div class="flex justify-between items-center text-[11px] text-slate-400 pt-2 border-t border-slate-800">
+            <span>2 Quincenas automáticas:</span>
+            <span class="font-mono text-cyan-300 font-bold" x-text="`S/ ${formatMoney(userData.baseSalary / 2)} cada una`">S/ 475.00 cada una</span>
           </div>
         </div>
 
-        <!-- INGRESOS EXTERNOS / TRABAJOS FREELANCE -->
+        <!-- INGRESOS EXTERNOS / SERVICIOS FREELANCE -->
         <div class="rounded-2xl bg-slate-900/80 border border-slate-800/80 p-4 space-y-3">
           <div class="flex items-center justify-between">
             <div>
@@ -619,9 +713,9 @@
             </template>
 
             <!-- MENSAJE VACÍO REAL -->
-            <div x-show="externalIncomes.length === 0" class="text-center py-6 text-xs text-slate-500 border border-dashed border-slate-800 rounded-xl space-y-1">
+            <div x-show="externalIncomes.length === 0" class="text-center py-7 text-xs text-slate-500 border border-dashed border-slate-800 rounded-xl space-y-1">
               <p class="font-medium text-slate-400">Aún no has registrado ingresos externos este mes.</p>
-              <p class="text-[10px]">Toca en "+ Agregar" cuando cobres un trabajo extra.</p>
+              <p class="text-[10px]">Toca en "+ Agregar" cuando cobres un trabajo freelance o soporte.</p>
             </div>
           </div>
 
@@ -634,7 +728,7 @@
 
       </section>
 
-      <!-- ================= 3. TAB: GASTOS ================= -->
+      <!-- ================= 3. PESTAÑA: GASTOS ================= -->
       <section x-show="activeTab === 'expenses'" class="space-y-4" style="display: none;">
         
         <!-- SUB-TABS: GASTOS FIJOS VS GASTOS DE BOLSILLO -->
@@ -671,7 +765,7 @@
             <template x-for="(expense, index) in fixedExpenses" :key="expense.id">
               <div 
                 class="flex items-center justify-between p-3 rounded-xl border transition"
-                :class="expense.isPaidOff ? 'bg-slate-950/40 border-slate-900 opacity-60' : (expense.paid ? 'bg-slate-950/90 border-slate-800' : 'bg-slate-950/90 border-amber-500/30')"
+                :class="expense.isPaidOff ? 'bg-slate-950/40 border-slate-900 opacity-60' : (expense.paid ? 'bg-slate-950/90 border-slate-800' : 'bg-slate-950/90 border-amber-500/40')"
               >
                 <div class="flex items-center space-x-3">
                   <!-- Checkbox de Pagado del mes -->
@@ -708,7 +802,7 @@
                   <button 
                     @click="togglePaidOff(index)" 
                     class="p-1 text-slate-500 hover:text-cyan-400 transition"
-                    :title="expense.isPaidOff ? 'Reactivar deuda' : 'Marcar como saldada'"
+                    :title="expense.isPaidOff ? 'Reactivar como gasto activo' : 'Marcar como 100% saldada'"
                   >
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -730,7 +824,7 @@
           </div>
 
           <div class="flex justify-between items-center p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-xs">
-            <span class="text-slate-400 font-medium">Total Fijos Activos (Resta mensual):</span>
+            <span class="text-slate-400 font-medium">Total Fijos Activos (Descuento real):</span>
             <span class="font-bold text-amber-400 font-mono" x-text="`S/ ${formatMoney(totalFixedExpenses)}`">S/ 252.00</span>
           </div>
         </div>
@@ -738,7 +832,7 @@
         <!-- LISTA GASTOS DE BOLSILLO REALES -->
         <div x-show="expenseSubTab === 'daily'" class="space-y-3" style="display: none;">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-bold text-slate-300">Gastos Diarios Registrados</span>
+            <span class="text-xs font-bold text-slate-300">Historial Diario Registrado</span>
             <button 
               @click="openModal('quickDaily')" 
               class="px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-400 border border-rose-500/40 text-xs font-bold active:scale-95 transition"
@@ -774,9 +868,9 @@
             </template>
 
             <!-- MENSAJE VACÍO REAL -->
-            <div x-show="dailyExpenses.length === 0" class="text-center py-6 text-xs text-slate-500 border border-dashed border-slate-800 rounded-xl space-y-1">
-              <p class="font-medium text-slate-400">Sin gastos de bolsillo registrados.</p>
-              <p class="text-[10px]">Toca en "+ Registrar Gasto" para anotar comida, pasajes u otros.</p>
+            <div x-show="dailyExpenses.length === 0" class="text-center py-7 text-xs text-slate-500 border border-dashed border-slate-800 rounded-xl space-y-1">
+              <p class="font-medium text-slate-400">Sin consumos de bolsillo registrados.</p>
+              <p class="text-[10px]">Toca en "+ Registrar Gasto" para anotar almuerzos, pasajes o antojos.</p>
             </div>
           </div>
 
@@ -788,7 +882,7 @@
 
       </section>
 
-      <!-- ================= 4. TAB: ASESOR DE INVERSIÓN ================= -->
+      <!-- ================= 4. PESTAÑA: ASESOR & SIMULADOR ================= -->
       <section x-show="activeTab === 'advisor'" class="space-y-4" style="display: none;">
         
         <div class="rounded-2xl bg-gradient-to-tr from-slate-900 via-slate-900 to-emerald-950/40 border border-emerald-500/30 p-4 space-y-3">
@@ -800,84 +894,148 @@
             </span>
             <div>
               <h2 class="text-sm font-bold text-white">Estrategia CrisBeBe</h2>
-              <p class="text-[11px] text-slate-400">Distribución de tus S/ 698.00 libres de partida</p>
+              <p class="text-[11px] text-slate-400">Cómo aprovechar tus S/ 698.00 libres de partida</p>
             </div>
           </div>
 
           <div class="p-3 rounded-xl bg-slate-950/70 border border-slate-800 text-xs space-y-1.5">
             <div class="flex items-center justify-between">
-              <span class="text-emerald-400 font-bold">Diagnóstico Real:</span>
-              <span class="text-[10px] text-slate-400 font-mono">Gastos fijos: 26.5%</span>
+              <span class="text-emerald-400 font-bold">Diagnóstico Financiero:</span>
+              <span class="text-[10px] text-slate-400 font-mono">Gastos Fijos: 26.5%</span>
             </div>
             <p class="text-slate-300 leading-relaxed text-[11px]">
-              Tus costos fijos (Alquiler S/ 200 + Agua/Luz S/ 37 + Spotify S/ 15) suman <strong class="text-white">S/ 252 al mes</strong>. Como tu préstamo de S/ 104 está saldado, te quedan <strong class="text-emerald-400">S/ 698.00 al mes</strong> disponibles para inversión y metas personales.
+              Tus costos fijos (Alquiler S/ 200 + Agua/Luz S/ 37 + Spotify S/ 15) son de apenas <strong class="text-white">S/ 252 al mes</strong>. Con tu préstamo saldado, te quedan <strong class="text-emerald-400">S/ 698.00 mensuales</strong> para invertir y multiplicar tu patrimonio.
             </p>
           </div>
         </div>
 
-        <!-- 3 PILARES DE ASIGNACIÓN -->
+        <!-- RECOMENDACIÓN DE LOS 3 PILARES -->
         <div class="rounded-2xl bg-slate-900/80 border border-slate-800/80 p-4 space-y-3">
           <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center justify-between">
-            <span>Sugerencia de Reparto Mensual</span>
+            <span>Distribución de tu Capital Libre</span>
             <span class="text-emerald-400 font-mono" x-text="`S/ ${formatMoney(netFreeCapital)}`">S/ 698.00</span>
           </h3>
 
           <div class="space-y-2.5">
-            <!-- 1. Fondo de Emergencia -->
+            <!-- 1. Fondo de Reserva -->
             <div class="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1.5">
               <div class="flex items-center justify-between text-xs">
                 <span class="font-bold text-cyan-400">1. Fondo de Reserva (35%)</span>
                 <span class="font-mono font-bold text-white" x-text="`S/ ${formatMoney(netFreeCapital * 0.35)}`">S/ 244.30</span>
               </div>
               <p class="text-[11px] text-slate-400 leading-tight">
-                <strong>Objetivo:</strong> Llegar a S/ 1,000 en una cuenta de alto rendimiento (Agora Ahorros 6% o Banco Pichincha).
+                <strong>Meta recomendada:</strong> S/ 1,000 (cubre casi 4 meses de tus costos fijos ante emergencias).
               </p>
+              <div class="text-[10px] text-slate-500 bg-slate-900 p-2 rounded-lg border border-slate-800">
+                💡 <em>En Perú:</em> Cuentas con seguro FSD como <strong>Agora Ahorros (6% anual)</strong>, Banco Pichincha o Caja Huancayo.
+              </div>
             </div>
 
-            <!-- 2. Herramientas y Habilidades -->
+            <!-- 2. Reinversión Productiva -->
             <div class="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1.5">
               <div class="flex items-center justify-between text-xs">
                 <span class="font-bold text-emerald-400">2. Inversión en Producción (35%)</span>
                 <span class="font-mono font-bold text-white" x-text="`S/ ${formatMoney(netFreeCapital * 0.35)}`">S/ 244.30</span>
               </div>
               <p class="text-[11px] text-slate-400 leading-tight">
-                <strong>Para ti como desarrollador:</strong> Mejorar tu PC, periféricos o licencias para ganar clientes freelance de S/ 200 a S/ 500.
+                <strong>Retorno directo:</strong> Herramientas para desarrollo web, software y edición de video.
               </p>
+              <div class="text-[10px] text-slate-500 bg-slate-900 p-2 rounded-lg border border-slate-800">
+                💡 <em>Impacto:</em> Conseguir 1 cliente de landing page o soporte técnico te genera de S/ 150 a S/ 400. Invertir en tu portafolio y equipo se paga solo.
+              </div>
             </div>
 
-            <!-- 3. Inversión a Largo Plazo -->
+            <!-- 3. Inversión Pasiva -->
             <div class="p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1.5">
               <div class="flex items-center justify-between text-xs">
-                <span class="font-bold text-amber-400">3. Inversión Pasiva (30%)</span>
+                <span class="font-bold text-amber-400">3. Inversión a Largo Plazo (30%)</span>
                 <span class="font-mono font-bold text-white" x-text="`S/ ${formatMoney(netFreeCapital * 0.30)}`">S/ 209.40</span>
               </div>
               <p class="text-[11px] text-slate-400 leading-tight">
-                <strong>Crecimiento:</strong> Aportaciones mensuales en ETFs del S&P 500 a través de apps para Perú como Trii o Hapi.
+                <strong>Crecimiento pasivo:</strong> Aportes mensuales para construir patrimonio a largo plazo.
               </p>
+              <div class="text-[10px] text-slate-500 bg-slate-900 p-2 rounded-lg border border-slate-800">
+                💡 <em>Dónde:</em> Apps como <strong>Trii</strong> (Bolsa de Valores de Lima) o <strong>Hapi</strong> (ETFs como VOO del S&P 500 desde S/ 50 al mes).
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SIMULADOR INTERACTIVO CON INTERÉS COMPUESTO -->
+        <div class="rounded-2xl bg-slate-900/80 border border-cyan-500/30 p-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-bold text-white uppercase tracking-wider">Simulador de Ahorro e Inversión</h3>
+            <span class="text-[10px] text-cyan-400 font-mono font-bold">8% anual est.</span>
+          </div>
+
+          <div class="space-y-2">
+            <div class="flex justify-between text-xs">
+              <span class="text-slate-400">Aporte mensual simulado:</span>
+              <span class="font-bold font-mono text-cyan-400 text-sm" x-text="`S/ ${formatMoney(simulatorAmount)}`"></span>
+            </div>
+            <input 
+              type="range" 
+              min="50" 
+              :max="Math.max(netFreeCapital, 400)" 
+              step="25" 
+              x-model.number="simulatorAmount" 
+              class="w-full accent-cyan-400 cursor-pointer"
+            >
+          </div>
+
+          <div class="grid grid-cols-2 gap-2 pt-2">
+            <div class="bg-slate-950 p-2.5 rounded-xl border border-slate-800 text-center">
+              <span class="text-[10px] text-slate-400">En 1 año:</span>
+              <div class="text-sm font-bold font-mono text-emerald-400 mt-0.5" x-text="`S/ ${formatMoney((simulatorAmount * 12) * 1.04)}`"></div>
+            </div>
+            <div class="bg-slate-950 p-2.5 rounded-xl border border-slate-800 text-center">
+              <span class="text-[10px] text-slate-400">En 3 años:</span>
+              <div class="text-sm font-bold font-mono text-cyan-400 mt-0.5" x-text="`S/ ${formatMoney((simulatorAmount * 36) * 1.13)}`"></div>
             </div>
           </div>
         </div>
 
       </section>
 
-      <!-- ================= 5. TAB: AJUSTES ================= -->
+      <!-- ================= 5. PESTAÑA: AJUSTES & PWA ================= -->
       <section x-show="activeTab === 'settings'" class="space-y-4" style="display: none;">
         
-        <!-- RESPALDO REAL -->
+        <!-- INSTALAR PWA -->
+        <div class="rounded-2xl bg-gradient-to-tr from-slate-900 to-emerald-950/30 border border-emerald-500/40 p-4 space-y-3">
+          <div class="flex items-center space-x-2">
+            <span class="p-1.5 rounded-xl bg-emerald-500/10 text-emerald-400">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+              </svg>
+            </span>
+            <div>
+              <h3 class="text-sm font-bold text-white">Instalar App en tu Celular</h3>
+              <p class="text-[11px] text-slate-400">Úsala a pantalla completa sin barras de navegador</p>
+            </div>
+          </div>
+          <button 
+            @click="installPWA()" 
+            class="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950 font-bold text-xs shadow-lg active:scale-95 transition"
+          >
+            📲 Instalar como Aplicación
+          </button>
+        </div>
+
+        <!-- RESPALDO DE DATOS -->
         <div class="rounded-2xl bg-slate-900/80 border border-slate-800/80 p-4 space-y-3">
           <h2 class="text-sm font-bold text-white flex items-center gap-2">
             <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
             </svg>
-            Respaldo de Datos Personales
+            Copia de Seguridad y Restauración
           </h2>
           <p class="text-xs text-slate-400">
-            Exporta tus datos reales a un archivo JSON o impórtalos en cualquier otro celular o computadora.
+            Exporta tus datos reales en formato JSON o restáuralos en cualquier otro teléfono o computadora.
           </p>
 
-          <div class="grid grid-cols-2 gap-2 pt-2">
+          <div class="grid grid-cols-2 gap-2 pt-1">
             <button 
-              @click="exportBackup()" 
+              @click="exportJSON()" 
               class="py-2.5 px-3 rounded-xl bg-emerald-600/20 text-emerald-300 border border-emerald-500/40 text-xs font-bold hover:bg-emerald-600/30 active:scale-95 transition flex items-center justify-center gap-1.5"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -891,22 +1049,22 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
               </svg>
               Importar JSON
-              <input type="file" accept=".json" @change="importBackup($event)" class="hidden">
+              <input type="file" accept=".json" @change="importJSON($event)" class="hidden">
             </label>
           </div>
         </div>
 
         <!-- RESTABLECER -->
         <div class="rounded-2xl bg-slate-900/80 border border-slate-800/80 p-4 space-y-3">
-          <h3 class="text-xs font-bold text-slate-300">Reiniciar a Configuración Inicial</h3>
+          <h3 class="text-xs font-bold text-slate-300">Restablecer Balance Oficial</h3>
           <p class="text-[11px] text-slate-400">
-            Restaura los valores oficiales: Sueldo S/ 950, Fijos S/ 252, Préstamo saldado y listas vacías.
+            Restaura la configuración oficial: Sueldo S/ 950, Fijos S/ 252, Préstamo saldado y listas vacías.
           </p>
           <button 
-            @click="resetToCrisBeBeDefaults()" 
+            @click="resetToCleanBalance()" 
             class="w-full py-2.5 px-3 rounded-xl bg-rose-950/40 border border-rose-800/50 text-rose-300 hover:text-rose-200 text-xs font-bold active:scale-95 transition"
           >
-            Limpiar y Restablecer a Cero
+            Restablecer a Balance Inicial
           </button>
         </div>
 
@@ -927,7 +1085,7 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
         </svg>
         <span class="text-[10px]">Inicio</span>
-        <div x-show="activeTab === 'dashboard'" class="w-1 h-1 rounded-full bg-emerald-400 absolute bottom-0"></div>
+        <div x-show="activeTab === 'dashboard'" class="w-1.5 h-1.5 rounded-full bg-emerald-400 absolute bottom-0"></div>
       </button>
 
       <!-- Tab 2: Ingresos -->
@@ -940,12 +1098,12 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
         </svg>
         <span class="text-[10px]">Ingresos</span>
-        <div x-show="activeTab === 'incomes'" class="w-1 h-1 rounded-full bg-cyan-400 absolute bottom-0"></div>
+        <div x-show="activeTab === 'incomes'" class="w-1.5 h-1.5 rounded-full bg-cyan-400 absolute bottom-0"></div>
       </button>
 
       <!-- Tab 3: Gastos -->
       <button 
-        @click="activeTab === 'expenses'" 
+        @click="activeTab = 'expenses'" 
         class="flex flex-col items-center justify-center flex-1 py-1 transition relative"
         :class="activeTab === 'expenses' ? 'text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'"
       >
@@ -953,12 +1111,12 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
         </svg>
         <span class="text-[10px]">Gastos</span>
-        <div x-show="activeTab === 'expenses'" class="w-1 h-1 rounded-full bg-amber-400 absolute bottom-0"></div>
+        <div x-show="activeTab === 'expenses'" class="w-1.5 h-1.5 rounded-full bg-amber-400 absolute bottom-0"></div>
       </button>
 
       <!-- Tab 4: Asesor -->
       <button 
-        @click="activeTab === 'advisor'" 
+        @click="activeTab = 'advisor'" 
         class="flex flex-col items-center justify-center flex-1 py-1 transition relative"
         :class="activeTab === 'advisor' ? 'text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200'"
       >
@@ -966,12 +1124,12 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
         </svg>
         <span class="text-[10px]">Asesor</span>
-        <div x-show="activeTab === 'advisor'" class="w-1 h-1 rounded-full bg-emerald-400 absolute bottom-0"></div>
+        <div x-show="activeTab === 'advisor'" class="w-1.5 h-1.5 rounded-full bg-emerald-400 absolute bottom-0"></div>
       </button>
 
       <!-- Tab 5: Ajustes -->
       <button 
-        @click="activeTab === 'settings'" 
+        @click="activeTab = 'settings'" 
         class="flex flex-col items-center justify-center flex-1 py-1 transition relative"
         :class="activeTab === 'settings' ? 'text-purple-400 font-bold' : 'text-slate-400 hover:text-slate-200'"
       >
@@ -980,12 +1138,12 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
         </svg>
         <span class="text-[10px]">Ajustes</span>
-        <div x-show="activeTab === 'settings'" class="w-1 h-1 rounded-full bg-purple-400 absolute bottom-0"></div>
+        <div x-show="activeTab === 'settings'" class="w-1.5 h-1.5 rounded-full bg-purple-400 absolute bottom-0"></div>
       </button>
 
     </nav>
 
-    <!-- ================= MODALES FLOTANTES ================= -->
+    <!-- ================= MODALES FLOTANTES (BOTTOM SHEETS) ================= -->
 
     <!-- MODAL: GASTO DIARIO -->
     <div 
@@ -1021,7 +1179,7 @@
               <input 
                 type="number" 
                 step="0.5" 
-                x-model="forms.daily.amount" 
+                x-model.number="forms.daily.amount" 
                 required 
                 placeholder="10.00" 
                 class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono font-bold text-white focus:outline-none focus:border-rose-400"
@@ -1086,7 +1244,7 @@
               <input 
                 type="number" 
                 step="5" 
-                x-model="forms.income.amount" 
+                x-model.number="forms.income.amount" 
                 required 
                 placeholder="150" 
                 class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono font-bold text-white focus:outline-none focus:border-emerald-400"
@@ -1151,7 +1309,7 @@
               <input 
                 type="number" 
                 step="1" 
-                x-model="forms.fixed.amount" 
+                x-model.number="forms.fixed.amount" 
                 required 
                 placeholder="50" 
                 class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono font-bold text-white focus:outline-none focus:border-amber-400"
@@ -1178,39 +1336,44 @@
       </div>
     </div>
 
-    <!-- MODAL: INFO -->
+    <!-- MODAL: EDITAR SUELDO BASE -->
     <div 
-      x-show="showDeployModal" 
+      x-show="modals.editSalary" 
       class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm"
       style="display: none;"
     >
       <div 
-        @click.away="showDeployModal = false" 
+        @click.away="closeModals()" 
         class="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-2xl"
       >
         <div class="flex items-center justify-between border-b border-slate-800 pb-2">
-          <h3 class="text-sm font-bold text-white">📱 SecuraQ Finanzas (CrisBeBe)</h3>
-          <button @click="showDeployModal = false" class="text-slate-400 hover:text-white text-xs">✕</button>
+          <h3 class="text-sm font-bold text-white">Editar Sueldo Base Mensual</h3>
+          <button @click="closeModals()" class="text-slate-400 hover:text-white text-xs">✕</button>
         </div>
 
-        <div class="text-xs text-slate-300 space-y-2 leading-relaxed">
-          <p>
-            • <strong>Sueldo Base:</strong> S/ 950 (Quincenas: S/ 475).<br>
-            • <strong>Fijos Activos:</strong> Alquiler (S/ 200) + Agua y Luz (S/ 37) + Spotify (S/ 15) = S/ 252.<br>
-            • <strong>Préstamo (S/ 104):</strong> Marcado como 100% saldado.<br>
-            • <strong>Capital Libre Neto:</strong> S/ 698.00 al inicio.
-          </p>
-          <p class="text-[11px] text-slate-400 pt-1">
-            Los datos se guardan en tu celular de forma segura con localStorage.
-          </p>
-        </div>
+        <form @submit.prevent="updateSalary()" class="space-y-3">
+          <div>
+            <label class="block text-[11px] text-slate-400 mb-1">Monto de tu Sueldo Base (S/)</label>
+            <input 
+              type="number" 
+              step="10" 
+              x-model.number="forms.tempSalary" 
+              required 
+              class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-lg font-mono font-bold text-white focus:outline-none focus:border-cyan-400"
+            >
+          </div>
+          <div class="flex justify-between items-center text-[10px] text-slate-400">
+            <span>Quincenas automáticas:</span>
+            <span class="font-mono text-cyan-300 font-bold" x-text="`S/ ${formatMoney(forms.tempSalary / 2)}`"></span>
+          </div>
 
-        <button 
-          @click="showDeployModal = false" 
-          class="w-full py-2.5 rounded-xl bg-slate-800 text-white font-bold text-xs transition"
-        >
-          Cerrar
-        </button>
+          <button 
+            type="submit" 
+            class="w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition"
+          >
+            Guardar Cambios
+          </button>
+        </form>
       </div>
     </div>
 
