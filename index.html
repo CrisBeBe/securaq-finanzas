@@ -392,6 +392,17 @@ _Generado con SecuraQ Finanzas PWA_`;
           reader.readAsText(file);
         },
 
+        clearAllData() {
+          if (!confirm('¿Estás seguro de que quieres BORRAR TODO y empezar desde CERO en blanco?')) return;
+          this.userData.baseSalary = 0;
+          this.externalIncomes = [];
+          this.fixedExpenses = [];
+          this.dailyExpenses = [];
+          this.forms.tempSalary = 0;
+          this.saveData();
+          this.showToast('Todo borrado. Balance en cero listo para tus datos.');
+        },
+
         resetToCleanBalance() {
           if (!confirm('¿Restablecer al balance inicial oficial de CrisBeBe?')) return;
           localStorage.removeItem('securaq_finanzas_v3_crisbebe');
@@ -1052,6 +1063,25 @@ _Generado con SecuraQ Finanzas PWA_`;
               <input type="file" accept=".json" @change="importJSON($event)" class="hidden">
             </label>
           </div>
+        </div>
+
+        <!-- BORRAR TODO / EMPEZAR EN BLANCO -->
+        <div class="rounded-2xl bg-slate-900/80 border border-rose-500/40 p-4 space-y-3">
+          <h3 class="text-xs font-bold text-rose-400 flex items-center gap-1.5">
+            <svg class="w-4 h-4 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+            </svg>
+            Borrar Todo y Empezar en Blanco
+          </h3>
+          <p class="text-[11px] text-slate-400">
+            Elimina todos los datos actuales (gastos fijos, sueldo e ingresos) para que configures tu app desde cero con tus propios números.
+          </p>
+          <button 
+            @click="clearAllData()" 
+            class="w-full py-2.5 px-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs active:scale-95 transition shadow-lg shadow-rose-950/40"
+          >
+            🗑️ Borrar Todo (Dejar en Blanco)
+          </button>
         </div>
 
         <!-- RESTABLECER -->
