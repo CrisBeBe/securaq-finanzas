@@ -70,48 +70,49 @@
           income: { title: '', amount: '', category: 'Desarrollo Web' },
           fixed: { title: '', amount: '', dueDate: 'Día 15', category: 'General' },
           invest: { title: '', amount: '', destination: 'Agora Ahorros (6%)' },
-          tempSalary: 950
+          tempSalary: 0
         },
 
         // ================= BOLSAS DE PRESUPUESTO SECCIONADAS =================
-        // Secciona cuánto puedes gastar exactamente en cada cosa tras pagar fijos
+        // Se inicializan en 0 para que tú pongas tus propios montos reales
         budgets: [
-          { id: 'Alimentación', name: 'Comida y Menús', icon: '🍔', assigned: 240, color: 'emerald' },
-          { id: 'Transporte', name: 'Pasajes y Transporte', icon: '🚌', assigned: 80, color: 'cyan' },
-          { id: 'Gustos', name: 'Gustos y Salidas', icon: '☕', assigned: 70, color: 'purple' },
-          { id: 'Salud', name: 'Salud e Imprevistos', icon: '💊', assigned: 60, color: 'amber' },
+          { id: 'Alimentación', name: 'Comida y Menús', icon: '🍔', assigned: 0, color: 'emerald' },
+          { id: 'Transporte', name: 'Pasajes y Transporte', icon: '🚌', assigned: 0, color: 'cyan' },
+          { id: 'Gustos', name: 'Gustos y Salidas', icon: '☕', assigned: 0, color: 'purple' },
+          { id: 'Salud', name: 'Salud e Imprevistos', icon: '💊', assigned: 0, color: 'amber' },
         ],
 
         // Simulador de Inversión
-        simulatorAmount: 250,
+        simulatorAmount: 100,
 
-        // ================= DATOS REALES DE CRISBEBE =================
+        // ================= DATOS 100% LIMPIOS EN BLANCO =================
+        // CERO datos de prueba: Tú ingresas tu sueldo y tus gastos fijos reales
         userData: {
           owner: 'CrisBeBe',
-          baseSalary: 950,
+          baseSalary: 0,
           currency: 'S/'
         },
 
-        // Ingresos externos empiezan limpios en 0
+        // Lista de ingresos externos vacía (0)
         externalIncomes: [],
 
-        // Gastos fijos reales configurados por el usuario
-        fixedExpenses: [
-          { id: 1, title: 'Alquiler de casa', amount: 200, paid: true, dueDate: '05 de cada mes', category: 'Vivienda', isPaidOff: false },
-          { id: 2, title: 'Préstamo personal (Saldado)', amount: 104, paid: true, dueDate: '10 de cada mes', category: 'Deuda', isPaidOff: true },
-          { id: 3, title: 'Agua y Luz', amount: 37, paid: false, dueDate: '18 de cada mes', category: 'Servicios Básicos', isPaidOff: false },
-          { id: 4, title: 'Spotify', amount: 15, paid: true, dueDate: '25 de cada mes', category: 'Suscripción', isPaidOff: false }
-        ],
+        // Lista de gastos fijos vacía (0) - Sin alquileres ni spotify de prueba
+        fixedExpenses: [],
 
-        // Gastos diarios empiezan limpios en 0
+        // Gastos diarios vacíos (0)
         dailyExpenses: [],
 
-        // ================= INVERSIONES MANUALES DE CRISBEBE =================
-        // NUNCA se invierte automáticamente: Tú decides cuándo y cuánto enviar a inversión
+        // Inversiones manuales vacías (0)
         investments: [],
         notificationsEnabled: false,
 
         init() {
+          // Limpieza forzada de cualquier dato de prueba anterior en el navegador
+          if (!localStorage.getItem('securaq_v5_wipe_done')) {
+            localStorage.clear();
+            localStorage.setItem('securaq_v5_wipe_done', 'true');
+          }
+
           // Comprobar si ya desbloqueó en la sesión activa
           if (sessionStorage.getItem('securaq_unlocked') === 'true') {
             this.isLocked = false;
@@ -138,19 +139,19 @@
             this.canInstall = true;
           });
 
-          // Cargar datos persistidos reales
-          const stored = localStorage.getItem('securaq_finanzas_v3_crisbebe');
+          // Cargar datos persistidos reales limpios
+          const stored = localStorage.getItem('securaq_finanzas_v5_crisbebe_prod');
           if (stored) {
             try {
               const data = JSON.parse(stored);
-              if (data.userData && data.userData.baseSalary) this.userData = data.userData;
+              if (data.userData) this.userData = data.userData;
               if (Array.isArray(data.externalIncomes)) this.externalIncomes = data.externalIncomes;
               if (Array.isArray(data.fixedExpenses)) this.fixedExpenses = data.fixedExpenses;
               if (Array.isArray(data.dailyExpenses)) this.dailyExpenses = data.dailyExpenses;
               if (Array.isArray(data.budgets)) this.budgets = data.budgets;
               if (Array.isArray(data.investments)) this.investments = data.investments;
             } catch (err) {
-              console.warn('Iniciando balance limpio de CrisBeBe.');
+              console.warn('Iniciando balance limpio.');
             }
           }
           this.forms.tempSalary = this.userData.baseSalary;
@@ -172,7 +173,7 @@
             investments: this.investments,
             updatedAt: new Date().toISOString()
           };
-          localStorage.setItem('securaq_finanzas_v3_crisbebe', JSON.stringify(payload));
+          localStorage.setItem('securaq_finanzas_v5_crisbebe_prod', JSON.stringify(payload));
         },
 
         // MÉTODOS DE BOLSAS SECCIONADAS
@@ -723,26 +724,17 @@ _Generado con SecuraQ Finanzas PWA_`;
         },
 
         resetToCleanBalance() {
-          if (!confirm('¿Restablecer al balance inicial oficial de CrisBeBe?')) return;
-          localStorage.removeItem('securaq_finanzas_v3_crisbebe');
-          this.userData.baseSalary = 950;
+          if (!confirm('¿Restablecer todo a CERO en blanco para poner tus datos?')) return;
+          localStorage.removeItem('securaq_finanzas_v5_crisbebe_prod');
+          this.userData.baseSalary = 0;
           this.externalIncomes = [];
           this.dailyExpenses = [];
-          this.budgets = [
-            { id: 'Alimentación', name: 'Comida y Menús', icon: '🍔', assigned: 240, color: 'emerald' },
-            { id: 'Transporte', name: 'Pasajes y Transporte', icon: '🚌', assigned: 80, color: 'cyan' },
-            { id: 'Gustos', name: 'Gustos y Salidas', icon: '☕', assigned: 70, color: 'purple' },
-            { id: 'Salud', name: 'Salud e Imprevistos', icon: '💊', assigned: 60, color: 'amber' },
-          ];
-          this.fixedExpenses = [
-            { id: 1, title: 'Alquiler de casa', amount: 200, paid: true, dueDate: '05 de cada mes', category: 'Vivienda', isPaidOff: false },
-            { id: 2, title: 'Préstamo personal (Saldado)', amount: 104, paid: true, dueDate: '10 de cada mes', category: 'Deuda', isPaidOff: true },
-            { id: 3, title: 'Agua y Luz', amount: 37, paid: false, dueDate: '18 de cada mes', category: 'Servicios Básicos', isPaidOff: false },
-            { id: 4, title: 'Spotify', amount: 15, paid: true, dueDate: '25 de cada mes', category: 'Suscripción', isPaidOff: false }
-          ];
-          this.forms.tempSalary = 950;
+          this.fixedExpenses = [];
+          this.investments = [];
+          this.budgets.forEach(b => b.assigned = 0);
+          this.forms.tempSalary = 0;
           this.saveData();
-          this.showToast('Balance oficial restablecido');
+          this.showToast('Balance restablecido a CERO');
         }
       };
     }
@@ -1013,7 +1005,7 @@ _Generado con SecuraQ Finanzas PWA_`;
           <div class="flex items-baseline space-x-2 my-1">
             <span class="text-2xl font-bold text-emerald-400 font-mono">S/</span>
             <span class="text-4xl font-extrabold tracking-tight text-white font-mono" x-text="formatMoney(availableToInvest)">
-              698.00
+              0.00
             </span>
           </div>
 
@@ -1046,8 +1038,8 @@ _Generado con SecuraQ Finanzas PWA_`;
             <!-- Fijos -->
             <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-2.5 text-center">
               <div class="text-[10px] text-amber-400 font-bold uppercase">Fijos</div>
-              <div class="text-xs font-bold text-white font-mono mt-0.5" x-text="`S/ ${formatMoney(totalFixedExpenses)}`">S/ 252.00</div>
-              <div class="text-[9px] text-slate-500">3 activos</div>
+              <div class="text-xs font-bold text-white font-mono mt-0.5" x-text="`S/ ${formatMoney(totalFixedExpenses)}`">S/ 0.00</div>
+              <div class="text-[9px] text-slate-500" x-text="`${fixedExpenses.filter(e => !e.isPaidOff).length} activos`">0 activos</div>
             </div>
 
             <!-- Bolsillo -->
@@ -1073,8 +1065,7 @@ _Generado con SecuraQ Finanzas PWA_`;
                 <p class="text-[10px] text-cyan-400" x-text="currentQuincenaInfo.title">1ra Quincena (1 al 15)</p>
               </div>
             </div>
-            <span class="text-xs font-mono text-cyan-300 font-bold bg-cyan-950/60 px-2.5 py-1 rounded-lg border border-cyan-800/50">
-              S/ 475.00
+            <span class="text-xs font-mono text-cyan-300 font-bold bg-cyan-950/60 px-2.5 py-1 rounded-lg border border-cyan-800/50" x-text="`S/ ${formatMoney(currentQuincenaInfo.amount)}`">
             </span>
           </div>
 
@@ -1484,11 +1475,11 @@ _Generado con SecuraQ Finanzas PWA_`;
 
           <div class="p-3 rounded-xl bg-slate-950/70 border border-slate-800 text-xs space-y-1.5">
             <div class="flex items-center justify-between">
-              <span class="text-emerald-400 font-bold">Diagnóstico Financiero:</span>
-              <span class="text-[10px] text-slate-400 font-mono">Gastos Fijos: 26.5%</span>
+              <span class="text-emerald-400 font-bold">Balance Real en Mano:</span>
+              <span class="text-[10px] text-slate-400 font-mono" x-text="`Cobrado: S/ ${formatMoney(totalIncome)}`"></span>
             </div>
             <p class="text-slate-300 leading-relaxed text-[11px]">
-              Tus costos fijos (Alquiler S/ 200 + Agua/Luz S/ 37 + Spotify S/ 15) son de apenas <strong class="text-white">S/ 252 al mes</strong>. Con tu préstamo saldado, te quedan <strong class="text-emerald-400">S/ 698.00 mensuales</strong> para invertir y multiplicar tu patrimonio.
+              Tus finanzas se calculan sobre lo que realmente tienes cobrado hoy. Tus gastos fijos activos suman <strong class="text-white font-mono" x-text="`S/ ${formatMoney(totalFixedExpenses)}`"></strong> y tus gastos diarios <strong class="text-rose-400 font-mono" x-text="`S/ ${formatMoney(totalDailyExpenses)}`"></strong>. Te quedan <strong class="text-emerald-400 font-mono" x-text="`S/ ${formatMoney(availableToInvest)}`"></strong> disponibles en mano.
             </p>
           </div>
         </div>
