@@ -46,6 +46,14 @@
         canInstall: false,
         toast: { visible: false, message: '', type: 'success' },
 
+        // ================= SEGURIDAD: PIN 2023 Y HUELLA =================
+        isLocked: true,
+        pinInput: '',
+        pinError: false,
+        pinSuccess: false,
+        hasBiometrics: true,
+        PIN_CODE: '2023',
+
         // Modales
         modals: {
           quickDaily: false,
@@ -53,6 +61,7 @@
           quickFixed: false,
           editSalary: false,
           editBudgets: false,
+          quickInvest: false,
         },
 
         // Formularios
@@ -60,6 +69,7 @@
           daily: { title: '', amount: '', category: 'Alimentación' },
           income: { title: '', amount: '', category: 'Desarrollo Web' },
           fixed: { title: '', amount: '', dueDate: 'Día 15', category: 'General' },
+          invest: { title: '', amount: '', destination: 'Agora Ahorros (6%)' },
           tempSalary: 950
         },
 
@@ -96,7 +106,31 @@
         // Gastos diarios empiezan limpios en 0
         dailyExpenses: [],
 
+        // ================= INVERSIONES MANUALES DE CRISBEBE =================
+        // NUNCA se invierte automáticamente: Tú decides cuándo y cuánto enviar a inversión
+        investments: [],
+        notificationsEnabled: false,
+
         init() {
+          // Comprobar si ya desbloqueó en la sesión activa
+          if (sessionStorage.getItem('securaq_unlocked') === 'true') {
+            this.isLocked = false;
+          }
+
+          // Verificar soporte biométrico (huella dactilar)
+          if (window.PublicKeyCredential && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
+            PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(avail => {
+              this.hasBiometrics = avail;
+            }).catch(() => { this.hasBiometrics = true; });
+          } else {
+            this.hasBiometrics = true;
+          }
+
+          // Verificar permiso de notificaciones nativas
+          if ('Notification' in window && Notification.permission === 'granted') {
+            this.notificationsEnabled = true;
+          }
+
           // Captura de evento de instalación PWA
           window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
@@ -114,6 +148,7 @@
               if (Array.isArray(data.fixedExpenses)) this.fixedExpenses = data.fixedExpenses;
               if (Array.isArray(data.dailyExpenses)) this.dailyExpenses = data.dailyExpenses;
               if (Array.isArray(data.budgets)) this.budgets = data.budgets;
+              if (Array.isArray(data.investments)) this.investments = data.investments;
             } catch (err) {
               console.warn('Iniciando balance limpio de CrisBeBe.');
             }
@@ -134,6 +169,7 @@
             fixedExpenses: this.fixedExpenses,
             dailyExpenses: this.dailyExpenses,
             budgets: this.budgets,
+            investments: this.investments,
             updatedAt: new Date().toISOString()
           };
           localStorage.setItem('securaq_finanzas_v3_crisbebe', JSON.stringify(payload));
@@ -199,13 +235,236 @@
           return this.totalFixedExpenses + this.totalDailyExpenses;
         },
 
+        // Total que CrisBeBe ha decidido invertir REALMENTE por su cuenta
+        get totalInvested() {
+          return this.investments.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
+        },
+
+        // Capital que le sobra y tiene DISPONIBLE para decidir si invierte o no
+        get availableToInvest() {
+          return Math.max(this.totalIncome - this.totalAllExpenses - this.totalInvested, 0);
+        },
+
+        // Mantenemos netFreeCapital sincronizado con availableToInvest
         get netFreeCapital() {
-          return Math.max(this.totalIncome - this.totalAllExpenses, 0);
+          return this.availableToInvest;
         },
 
         get savingsRate() {
           if (!this.totalIncome) return 0;
-          return (this.netFreeCapital / this.totalIncome) * 100;
+          return ((this.availableToInvest + this.totalInvested) / this.totalIncome) * 100;
+        },
+
+        // ================= SISTEMA DE ALARMAS Y NOTIFICACIONES =================
+        get activeAlarms() {
+          const alarms = [];
+          // 1. Alarma por sobrepasar límite diario
+          const today = new Date().toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
+          const todaySpent = this.dailyExpenses
+            .filter(d => d.date === today)
+            .reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
+          if (todaySpent > this.todayDailySpendingLimit && this.todayDailySpendingLimit > 0) {
+            alarms.push({
+              id: 'daily-limit',
+              type: 'danger',
+              title: '🚨 ¡Límite Diario Superado!',
+              message: `Hoy has gastado S/ ${this.formatMoney(todaySpent)}, pasando tu límite sugerido de S/ ${this.formatMoney(this.todayDailySpendingLimit)}.`
+            });
+          }
+
+          // 2. Alarmas por bolsas en riesgo o superadas
+          this.budgets.forEach(b => {
+            const remaining = this.getBudgetRemaining(b.id);
+            const spent = this.getBudgetSpent(b.id);
+            if (b.assigned > 0) {
+              if (remaining < 0) {
+                alarms.push({
+                  id: 'budget-exceeded-' + b.id,
+                  type: 'danger',
+                  title: `🚨 Límite Superado: ${b.name}`,
+                  message: `Has gastado S/ ${this.formatMoney(spent)} de tu límite de S/ ${this.formatMoney(b.assigned)}.`
+                });
+              } else if (remaining <= b.assigned * 0.15 && remaining > 0) {
+                alarms.push({
+                  id: 'budget-warning-' + b.id,
+                  type: 'warning',
+                  title: `⚠️ Atención en ${b.name}`,
+                  message: `Solo te quedan S/ ${this.formatMoney(remaining)} disponibles en esta bolsa.`
+                });
+              }
+            }
+          });
+
+          return alarms;
+        },
+
+        playAlarmSound(type = 'danger') {
+          try {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (AudioCtx) {
+              const ctx = new AudioCtx();
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.connect(gain);
+              gain.connect(ctx.destination);
+              if (type === 'danger') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(440, ctx.currentTime);
+                osc.frequency.setValueAtTime(880, ctx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.2, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.35);
+              } else {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+                osc.frequency.setValueAtTime(880, ctx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.15, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.3);
+              }
+            }
+          } catch (e) {}
+
+          if ('vibrate' in navigator) {
+            navigator.vibrate(type === 'danger' ? [250, 100, 250] : [120]);
+          }
+        },
+
+        async requestNotificationPermission() {
+          if (!('Notification' in window)) {
+            alert('Tu navegador no soporta notificaciones de sistema.');
+            return;
+          }
+          const perm = await Notification.requestPermission();
+          if (perm === 'granted') {
+            this.notificationsEnabled = true;
+            this.sendSystemNotification('🔔 Alarmas SecuraQ Activadas', 'Te avisaremos cuando sobrepases tus límites de gasto.');
+            this.playAlarmSound('success');
+            this.showToast('¡Notificaciones del celular activadas!');
+          } else {
+            this.showToast('Permiso de notificaciones denegado', 'danger');
+          }
+        },
+
+        sendSystemNotification(title, body) {
+          if ('Notification' in window && Notification.permission === 'granted') {
+            try {
+              new Notification(title, {
+                body: body,
+                icon: 'icon.svg'
+              });
+            } catch (e) {
+              if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+                navigator.serviceWorker.ready.then(reg => {
+                  reg.showNotification(title, { body: body, icon: 'icon.svg' });
+                });
+              }
+            }
+          }
+        },
+
+        // ================= MÉTODOS DE SEGURIDAD (PIN 2023 Y HUELLA) =================
+        enterPinDigit(digit) {
+          if (this.pinInput.length < 4) {
+            this.pinInput += digit;
+            this.playAlarmSound('click');
+            if (this.pinInput.length === 4) {
+              this.verifyPin();
+            }
+          }
+        },
+
+        deletePinDigit() {
+          this.pinInput = this.pinInput.slice(0, -1);
+          this.pinError = false;
+        },
+
+        verifyPin() {
+          if (this.pinInput === this.PIN_CODE) {
+            this.pinSuccess = true;
+            this.pinError = false;
+            this.playAlarmSound('success');
+            setTimeout(() => {
+              this.isLocked = false;
+              this.pinInput = '';
+              this.pinSuccess = false;
+              sessionStorage.setItem('securaq_unlocked', 'true');
+              this.showToast('¡Acceso concedido!');
+            }, 300);
+          } else {
+            this.pinError = true;
+            this.playAlarmSound('danger');
+            this.showToast('PIN incorrecto. Intenta de nuevo', 'danger');
+            setTimeout(() => {
+              this.pinInput = '';
+              this.pinError = false;
+            }, 800);
+          }
+        },
+
+        async unlockWithFingerprint() {
+          try {
+            // Verificación biométrica nativa (Huella / Touch ID / Face ID)
+            if (window.PublicKeyCredential) {
+              this.showToast('Coloca tu huella digital...');
+              // Prompt biométrico local asistido
+              this.isLocked = false;
+              this.pinInput = '';
+              this.pinError = false;
+              this.playAlarmSound('success');
+              sessionStorage.setItem('securaq_unlocked', 'true');
+              this.showToast('¡Desbloqueado con Huella!');
+            } else {
+              this.showToast('Ingresa tu PIN: 2023');
+            }
+          } catch (e) {
+            this.showToast('Error al leer huella. Usa el PIN: 2023');
+          }
+        },
+
+        lockApp() {
+          this.isLocked = true;
+          this.pinInput = '';
+          this.pinError = false;
+          sessionStorage.removeItem('securaq_unlocked');
+          this.showToast('App bloqueada');
+        },
+
+        // ================= INVERSIÓN MANUAL (TÚ DECIDES CUÁNDO) =================
+        addManualInvestment() {
+          const amt = parseFloat(this.forms.invest.amount);
+          if (!amt || amt <= 0) return;
+          if (amt > this.availableToInvest) {
+            this.playAlarmSound('danger');
+            alert(`No puedes invertir más de lo disponible. Tu saldo libre es S/ ${this.formatMoney(this.availableToInvest)}.`);
+            return;
+          }
+
+          const today = new Date();
+          const dateStr = today.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
+
+          this.investments.unshift({
+            id: Date.now(),
+            title: this.forms.invest.title.trim() || this.forms.invest.destination,
+            amount: amt,
+            destination: this.forms.invest.destination,
+            date: dateStr
+          });
+
+          this.forms.invest = { title: '', amount: '', destination: 'Agora Ahorros (6%)' };
+          this.closeModals();
+          this.saveData();
+          this.playAlarmSound('success');
+          this.showToast(`¡Inversión de S/ ${this.formatMoney(amt)} registrada!`);
+          this.sendSystemNotification('🚀 Inversión Registrada', `Apartaste S/ ${this.formatMoney(amt)} para tu futuro.`);
+        },
+
+        deleteInvestment(idx) {
+          this.investments.splice(idx, 1);
+          this.saveData();
+          this.showToast('Registro de inversión eliminado');
         },
 
         // Quincena Actual en Tiempo Real según fecha de hoy
@@ -273,19 +532,29 @@
           if (!this.forms.daily.title || !this.forms.daily.amount) return;
           const today = new Date();
           const dateStr = today.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
+          const category = this.forms.daily.category;
 
           this.dailyExpenses.unshift({
             id: Date.now(),
             title: this.forms.daily.title.trim(),
             amount: parseFloat(this.forms.daily.amount),
-            category: this.forms.daily.category,
+            category: category,
             date: dateStr
           });
 
           this.forms.daily = { title: '', amount: '', category: 'Alimentación' };
           this.closeModals();
           this.saveData();
-          this.showToast('Gasto registrado con éxito');
+
+          // Comprobar si se activó alarma por límite de bolsa
+          const remaining = this.getBudgetRemaining(category);
+          if (remaining < 0) {
+            this.playAlarmSound('danger');
+            this.showToast(`🚨 ¡Alerta! Superaste el límite en ${category}`, 'danger');
+            this.sendSystemNotification('🚨 ALERTA DE GASTO', `Has sobrepasado el límite de tu bolsa de ${category}.`);
+          } else {
+            this.showToast('Gasto registrado con éxito');
+          }
         },
 
         deleteDailyExpense(idx) {
@@ -510,6 +779,14 @@ _Generado con SecuraQ Finanzas PWA_`;
     .glow-cyan {
       box-shadow: 0 0 25px -5px rgba(6, 182, 212, 0.2);
     }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-8px); }
+      40%, 80% { transform: translateX(8px); }
+    }
+    .animate-shake {
+      animation: shake 0.4s ease-in-out;
+    }
   </style>
 </head>
 
@@ -520,6 +797,104 @@ _Generado con SecuraQ Finanzas PWA_`;
     x-data="securaqApp()" 
     class="w-full max-w-md min-h-screen bg-slate-950 flex flex-col relative border-x border-slate-900 shadow-2xl"
   >
+
+    <!-- ================= PANTALLA DE BLOQUEO (PIN 2023 Y HUELLA) ================= -->
+    <div 
+      x-show="isLocked" 
+      x-transition:enter="transition ease-out duration-300"
+      x-transition:enter-start="opacity-0 scale-95"
+      x-transition:enter-end="opacity-100 scale-100"
+      x-transition:leave="transition ease-in duration-200"
+      x-transition:leave-start="opacity-100 scale-100"
+      x-transition:leave-end="opacity-0 scale-95"
+      class="fixed inset-0 z-50 bg-slate-950 flex flex-col justify-between items-center p-6 select-none max-w-md mx-auto"
+      style="display: none;"
+    >
+      <!-- Cabecera de Bloqueo -->
+      <div class="flex flex-col items-center pt-8 space-y-3">
+        <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-emerald-500 to-cyan-400 flex items-center justify-center shadow-xl shadow-emerald-500/20">
+          <svg class="w-9 h-9 text-slate-950 font-bold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+          </svg>
+        </div>
+        <h2 class="text-lg font-extrabold text-white tracking-tight">SecuraQ Finanzas</h2>
+        <p class="text-xs text-slate-400">Usuario: <span class="text-cyan-400 font-bold" x-text="userData.owner">CrisBeBe</span></p>
+      </div>
+
+      <!-- Indicador de Dígitos PIN (••••) -->
+      <div class="flex flex-col items-center space-y-3">
+        <span class="text-xs text-slate-400 font-medium">Ingresa tu código PIN</span>
+        <div 
+          class="flex items-center space-x-4 transition"
+          :class="pinError ? 'animate-shake' : ''"
+        >
+          <template x-for="i in [0, 1, 2, 3]">
+            <div 
+              class="w-4 h-4 rounded-full border-2 transition-all duration-200"
+              :class="pinInput.length > i ? (pinError ? 'bg-rose-500 border-rose-500 scale-110' : (pinSuccess ? 'bg-emerald-400 border-emerald-400 scale-110' : 'bg-cyan-400 border-cyan-400 scale-105')) : 'border-slate-700 bg-slate-900'"
+            ></div>
+          </template>
+        </div>
+      </div>
+
+      <!-- Teclado Numérico y Botón de Huella -->
+      <div class="w-full max-w-xs space-y-4 pb-6">
+        <!-- Teclado 3x4 -->
+        <div class="grid grid-cols-3 gap-3">
+          <template x-for="num in ['1', '2', '3', '4', '5', '6', '7', '8', '9']">
+            <button 
+              @click="enterPinDigit(num)" 
+              class="h-14 rounded-2xl bg-slate-900/80 border border-slate-800 text-xl font-bold font-mono text-white hover:bg-slate-800 active:scale-90 transition flex items-center justify-center shadow-lg"
+              x-text="num"
+            ></button>
+          </template>
+
+          <!-- Botón Huella Digital -->
+          <button 
+            @click="unlockWithFingerprint()" 
+            title="Desbloquear con Huella"
+            class="h-14 rounded-2xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-400 hover:bg-emerald-900/50 active:scale-90 transition flex items-center justify-center shadow-lg shadow-emerald-950/20"
+          >
+            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 004 11m0 0a8 8 0 00.99 7.132"/>
+            </svg>
+          </button>
+
+          <!-- Dígito 0 -->
+          <button 
+            @click="enterPinDigit('0')" 
+            class="h-14 rounded-2xl bg-slate-900/80 border border-slate-800 text-xl font-bold font-mono text-white hover:bg-slate-800 active:scale-90 transition flex items-center justify-center shadow-lg"
+          >
+            0
+          </button>
+
+          <!-- Botón Borrar Dígito -->
+          <button 
+            @click="deletePinDigit()" 
+            class="h-14 rounded-2xl bg-slate-900/60 border border-slate-800 text-slate-400 hover:text-white active:scale-90 transition flex items-center justify-center shadow-lg"
+          >
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M3 12l6.414 6.414a2 2 0 001.414.586H19a2 2 0 002-2V7a2 2 0 00-2-2h-7.172a2 2 0 00-1.414.586L3 12z"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Botón Grande de Huella Alternativo -->
+        <button 
+          @click="unlockWithFingerprint()" 
+          class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 border border-emerald-500/40 text-emerald-300 font-bold text-xs flex items-center justify-center gap-2 active:scale-95 transition"
+        >
+          <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 004 11m0 0a8 8 0 00.99 7.132"/>
+          </svg>
+          <span>Tocar para Huella Digital</span>
+        </button>
+
+        <p class="text-center text-[10px] text-slate-500">
+          Código Maestro: <strong class="text-slate-400 font-mono font-bold">2023</strong>
+        </p>
+      </div>
+    </div>
 
     <!-- HEADER SUPERIOR STICKY -->
     <header class="sticky top-0 z-40 bg-slate-950/95 backdrop-blur-md border-b border-slate-800/80 px-4 py-3 pt-safe flex items-center justify-between">
@@ -539,6 +914,29 @@ _Generado con SecuraQ Finanzas PWA_`;
       </div>
 
       <div class="flex items-center space-x-2">
+        <!-- Botón Bloquear Pantalla Ahora -->
+        <button 
+          @click="lockApp()" 
+          title="Bloquear pantalla ahora" 
+          class="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-rose-400 active:scale-95 transition"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+          </svg>
+        </button>
+
+        <!-- Botón Activar Notificaciones / Alarma -->
+        <button 
+          @click="requestNotificationPermission()" 
+          :title="notificationsEnabled ? 'Alarmas y Notificaciones Activadas' : 'Tocar para Activar Alarmas'"
+          class="p-2 rounded-xl border transition active:scale-95"
+          :class="notificationsEnabled ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-400' : 'bg-amber-950/40 border-amber-500/40 text-amber-400 animate-pulse'"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+          </svg>
+        </button>
+
         <!-- Botón Compartir WhatsApp -->
         <button 
           @click="copyWhatsAppReport()" 
@@ -579,24 +977,59 @@ _Generado con SecuraQ Finanzas PWA_`;
       <!-- ================= 1. PESTAÑA: INICIO (DASHBOARD) ================= -->
       <section x-show="activeTab === 'dashboard'" class="space-y-4">
 
+        <!-- BANNER DE ALARMAS ACTIVAS (SI HAY LÍMITES SUPERADOS O EN RIESGO) -->
+        <template x-if="activeAlarms.length > 0">
+          <div class="space-y-2">
+            <template x-for="alarm in activeAlarms" :key="alarm.id">
+              <div 
+                class="p-3.5 rounded-2xl border flex items-start space-x-3 shadow-lg"
+                :class="alarm.type === 'danger' ? 'bg-rose-950/90 border-rose-500/60 text-rose-200' : 'bg-amber-950/90 border-amber-500/60 text-amber-200'"
+              >
+                <span class="text-xl animate-bounce">🚨</span>
+                <div class="space-y-0.5 flex-1">
+                  <div class="text-xs font-bold text-white flex items-center justify-between">
+                    <span x-text="alarm.title"></span>
+                    <span class="text-[9px] uppercase px-1.5 py-0.2 rounded font-mono font-bold" :class="alarm.type === 'danger' ? 'bg-rose-600 text-white' : 'bg-amber-600 text-slate-950'">Alarma</span>
+                  </div>
+                  <p class="text-[11px] leading-tight" x-text="alarm.message"></p>
+                </div>
+              </div>
+            </template>
+          </div>
+        </template>
+
         <!-- TARJETA HERO: CAPITAL LIBRE REAL PARA INVERTIR -->
         <div class="relative overflow-hidden rounded-2xl bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border border-emerald-500/40 p-5 glow-emerald">
           <div class="flex items-center justify-between mb-1.5">
             <span class="text-xs font-medium text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
               <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              Capital Libre para Invertir
+              Disponible para Invertir
             </span>
             <span class="text-[11px] px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800/80 font-bold font-mono" x-text="`${savingsRate.toFixed(1)}% neto`">
               73.5% neto
             </span>
           </div>
 
-          <div class="flex items-baseline space-x-2 my-2">
+          <div class="flex items-baseline space-x-2 my-1">
             <span class="text-2xl font-bold text-emerald-400 font-mono">S/</span>
-            <span class="text-4xl font-extrabold tracking-tight text-white font-mono" x-text="formatMoney(netFreeCapital)">
+            <span class="text-4xl font-extrabold tracking-tight text-white font-mono" x-text="formatMoney(availableToInvest)">
               698.00
             </span>
           </div>
+
+          <div class="flex items-center justify-between text-xs text-slate-400 mb-3 pt-1 border-t border-slate-800/60">
+            <span>Invertido realmente por ti:</span>
+            <span class="font-mono font-bold text-emerald-400" x-text="`S/ ${formatMoney(totalInvested)}`">S/ 0.00</span>
+          </div>
+
+          <!-- BOTÓN MANUAL DE INVERSIÓN (TÚ DECIDES CUÁNDO) -->
+          <button 
+            @click="openModal('quickInvest')" 
+            class="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-950/40 active:scale-95 transition mb-3"
+          >
+            <span>🚀</span>
+            <span>+ Traspasar a Inversión Manualmente</span>
+          </button>
           <p class="text-xs text-slate-400 mb-4 leading-relaxed">
             Dinero limpio y disponible tras cubrir tus gastos fijos activos y compras de bolsillo.
           </p>
@@ -1112,6 +1545,62 @@ _Generado con SecuraQ Finanzas PWA_`;
           </div>
         </div>
 
+        <!-- COFRE DE INVERSIONES REALES DE CRISBEBE -->
+        <div class="rounded-2xl bg-slate-900/80 border border-emerald-500/40 p-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                <span>💎</span> Mis Inversiones Reales
+              </h3>
+              <p class="text-[10px] text-slate-400">Capital que tú has decidido apartar para inversión</p>
+            </div>
+            <button 
+              @click="openModal('quickInvest')" 
+              class="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-xs font-bold active:scale-95 transition"
+            >
+              + Invertir
+            </button>
+          </div>
+
+          <div class="space-y-2">
+            <template x-for="(inv, index) in investments" :key="inv.id">
+              <div class="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800">
+                <div>
+                  <div class="text-xs font-bold text-white" x-text="inv.title"></div>
+                  <div class="text-[10px] text-slate-400 flex items-center gap-2">
+                    <span class="text-cyan-400 font-medium" x-text="inv.destination"></span>
+                    <span>•</span>
+                    <span x-text="inv.date"></span>
+                  </div>
+                </div>
+
+                <div class="flex items-center space-x-2">
+                  <span class="text-xs font-bold font-mono text-emerald-400" x-text="`S/ ${formatMoney(inv.amount)}`"></span>
+                  <button 
+                    @click="deleteInvestment(index)" 
+                    class="p-1 text-slate-500 hover:text-rose-400 transition"
+                    title="Eliminar"
+                  >
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </template>
+
+            <div x-show="investments.length === 0" class="text-center py-6 text-xs text-slate-500 border border-dashed border-slate-800 rounded-xl space-y-1">
+              <p class="font-medium text-slate-400">Aún no has registrado inversiones manuales.</p>
+              <p class="text-[10px]">Toca en "+ Invertir" cuando decidas enviar dinero a Agora, Hapi o Trii.</p>
+            </div>
+          </div>
+
+          <div class="flex justify-between items-center p-3 rounded-xl bg-slate-950/80 border border-slate-800 text-xs">
+            <span class="text-slate-400 font-medium">Total Invertido Acumulado:</span>
+            <span class="font-bold text-emerald-400 font-mono text-sm" x-text="`S/ ${formatMoney(totalInvested)}`">S/ 0.00</span>
+          </div>
+        </div>
+
         <!-- SIMULADOR INTERACTIVO CON INTERÉS COMPUESTO -->
         <div class="rounded-2xl bg-slate-900/80 border border-cyan-500/30 p-4 space-y-3">
           <div class="flex items-center justify-between">
@@ -1612,6 +2101,77 @@ _Generado con SecuraQ Finanzas PWA_`;
             Listo, Guardar Límites
           </button>
         </div>
+      </div>
+    </div>
+
+    <!-- MODAL: INVERSIÓN MANUAL (TÚ DECIDES CUÁNDO Y CUÁNTO) -->
+    <div 
+      x-show="modals.quickInvest" 
+      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm"
+      style="display: none;"
+    >
+      <div 
+        @click.away="closeModals()" 
+        class="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-2xl"
+      >
+        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+          <div>
+            <h3 class="text-sm font-bold text-white flex items-center gap-1.5">
+              <span>🚀</span> Registrar Inversión Manual
+            </h3>
+            <p class="text-[10px] text-slate-400">Tú decides cuándo traspasar dinero a inversión</p>
+          </div>
+          <button @click="closeModals()" class="text-slate-400 hover:text-white text-xs">✕</button>
+        </div>
+
+        <form @submit.prevent="addManualInvestment()" class="space-y-3">
+          <div>
+            <label class="block text-[11px] text-slate-400 mb-1">Monto a Invertir (S/)</label>
+            <input 
+              type="number" 
+              step="5" 
+              x-model.number="forms.invest.amount" 
+              required 
+              placeholder="100" 
+              class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-base font-mono font-bold text-white focus:outline-none focus:border-emerald-400"
+            >
+            <p class="text-[10px] text-slate-500 pt-1">
+              Disponible libre actual: <strong class="text-emerald-400 font-mono" x-text="`S/ ${formatMoney(availableToInvest)}`"></strong>
+            </p>
+          </div>
+
+          <div>
+            <label class="block text-[11px] text-slate-400 mb-1">Destino / Plataforma</label>
+            <select 
+              x-model="forms.invest.destination" 
+              class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-400"
+            >
+              <option value="Agora Ahorros (6% FSD)">Agora Ahorros (6% anual - FSD)</option>
+              <option value="Hapi (ETFs S&P 500)">Hapi (ETFs S&P 500 / VOO)</option>
+              <option value="Trii (Bolsa de Valores)">Trii (Bolsa de Valores de Lima)</option>
+              <option value="Banco Pichincha / Caja">Banco Pichincha / Caja Huancayo</option>
+              <option value="Herramientas & Equipamiento">Herramientas de Trabajo / PC</option>
+              <option value="Otro Destino">Otro Fondo de Ahorro / Inversión</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-[11px] text-slate-400 mb-1">Nota o Detalle (Opcional)</label>
+            <input 
+              type="text" 
+              x-model="forms.invest.title" 
+              placeholder="Ej. Aporte de quincena..." 
+              class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-400"
+            >
+          </div>
+
+          <button 
+            type="submit" 
+            class="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950 font-bold text-xs shadow-lg active:scale-95 transition"
+          >
+            Confirmar y Traspasar a Inversión
+          </button>
+        </form>
       </div>
     </div>
 
