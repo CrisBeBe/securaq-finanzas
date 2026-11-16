@@ -51,7 +51,6 @@
         pinInput: '',
         pinError: false,
         pinSuccess: false,
-        hasBiometrics: true,
         PIN_CODE: '2023',
 
         // Modales
@@ -116,15 +115,6 @@
           // Comprobar si ya desbloqueó en la sesión activa
           if (sessionStorage.getItem('securaq_unlocked') === 'true') {
             this.isLocked = false;
-          }
-
-          // Verificar soporte biométrico (huella dactilar)
-          if (window.PublicKeyCredential && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
-            PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(avail => {
-              this.hasBiometrics = avail;
-            }).catch(() => { this.hasBiometrics = true; });
-          } else {
-            this.hasBiometrics = true;
           }
 
           // Verificar permiso de notificaciones nativas
@@ -405,24 +395,10 @@
           }
         },
 
-        async unlockWithFingerprint() {
-          try {
-            // Verificación biométrica nativa (Huella / Touch ID / Face ID)
-            if (window.PublicKeyCredential) {
-              this.showToast('Coloca tu huella digital...');
-              // Prompt biométrico local asistido
-              this.isLocked = false;
-              this.pinInput = '';
-              this.pinError = false;
-              this.playAlarmSound('success');
-              sessionStorage.setItem('securaq_unlocked', 'true');
-              this.showToast('¡Desbloqueado con Huella!');
-            } else {
-              this.showToast('Ingresa tu PIN: 2023');
-            }
-          } catch (e) {
-            this.showToast('Error al leer huella. Usa el PIN: 2023');
-          }
+        // Huella eliminada por seguridad — solo PIN real
+        // (La huella anterior era falsa: entraba sin verificar nada)
+        unlockWithFingerprint() {
+          this.showToast('Usa el PIN para entrar de forma segura', 'danger');
         },
 
         lockApp() {
@@ -841,16 +817,10 @@ _Generado con SecuraQ Finanzas PWA_`;
             ></button>
           </template>
 
-          <!-- Botón Huella Digital -->
-          <button 
-            @click="unlockWithFingerprint()" 
-            title="Desbloquear con Huella"
-            class="h-14 rounded-2xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-400 hover:bg-emerald-900/50 active:scale-90 transition flex items-center justify-center shadow-lg shadow-emerald-950/20"
-          >
-            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 004 11m0 0a8 8 0 00.99 7.132"/>
-            </svg>
-          </button>
+          <!-- Espacio vacío en lugar de huella (seguridad: solo PIN real) -->
+          <div class="h-14 rounded-2xl bg-slate-900/20 border border-slate-800/30 flex items-center justify-center">
+            <span class="text-slate-700 text-xs">🔒</span>
+          </div>
 
           <!-- Dígito 0 -->
           <button 
@@ -871,19 +841,8 @@ _Generado con SecuraQ Finanzas PWA_`;
           </button>
         </div>
 
-        <!-- Botón Grande de Huella Alternativo -->
-        <button 
-          @click="unlockWithFingerprint()" 
-          class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 border border-emerald-500/40 text-emerald-300 font-bold text-xs flex items-center justify-center gap-2 active:scale-95 transition"
-        >
-          <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 004 11m0 0a8 8 0 00.99 7.132"/>
-          </svg>
-          <span>Tocar para Huella Digital</span>
-        </button>
-
         <p class="text-center text-[10px] text-slate-500">
-          Código Maestro: <strong class="text-slate-400 font-mono font-bold">2023</strong>
+          Código PIN: <strong class="text-slate-400 font-mono font-bold">4 dígitos</strong>
         </p>
       </div>
     </div>
