@@ -52,6 +52,7 @@
           quickIncome: false,
           quickFixed: false,
           editSalary: false,
+          editBudgets: false,
         },
 
         // Formularios
@@ -61,6 +62,15 @@
           fixed: { title: '', amount: '', dueDate: 'Día 15', category: 'General' },
           tempSalary: 950
         },
+
+        // ================= BOLSAS DE PRESUPUESTO SECCIONADAS =================
+        // Secciona cuánto puedes gastar exactamente en cada cosa tras pagar fijos
+        budgets: [
+          { id: 'Alimentación', name: 'Comida y Menús', icon: '🍔', assigned: 240, color: 'emerald' },
+          { id: 'Transporte', name: 'Pasajes y Transporte', icon: '🚌', assigned: 80, color: 'cyan' },
+          { id: 'Gustos', name: 'Gustos y Salidas', icon: '☕', assigned: 70, color: 'purple' },
+          { id: 'Salud', name: 'Salud e Imprevistos', icon: '💊', assigned: 60, color: 'amber' },
+        ],
 
         // Simulador de Inversión
         simulatorAmount: 250,
@@ -103,6 +113,7 @@
               if (Array.isArray(data.externalIncomes)) this.externalIncomes = data.externalIncomes;
               if (Array.isArray(data.fixedExpenses)) this.fixedExpenses = data.fixedExpenses;
               if (Array.isArray(data.dailyExpenses)) this.dailyExpenses = data.dailyExpenses;
+              if (Array.isArray(data.budgets)) this.budgets = data.budgets;
             } catch (err) {
               console.warn('Iniciando balance limpio de CrisBeBe.');
             }
@@ -122,9 +133,46 @@
             externalIncomes: this.externalIncomes,
             fixedExpenses: this.fixedExpenses,
             dailyExpenses: this.dailyExpenses,
+            budgets: this.budgets,
             updatedAt: new Date().toISOString()
           };
           localStorage.setItem('securaq_finanzas_v3_crisbebe', JSON.stringify(payload));
+        },
+
+        // MÉTODOS DE BOLSAS SECCIONADAS
+        getBudgetSpent(category) {
+          return this.dailyExpenses
+            .filter(d => d.category === category)
+            .reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
+        },
+
+        getBudgetRemaining(category) {
+          const b = this.budgets.find(item => item.id === category);
+          if (!b) return 0;
+          return (parseFloat(b.assigned) || 0) - this.getBudgetSpent(category);
+        },
+
+        getBudgetPercent(category) {
+          const b = this.budgets.find(item => item.id === category);
+          if (!b || !b.assigned) return 0;
+          return Math.min(Math.round((this.getBudgetSpent(category) / b.assigned) * 100), 100);
+        },
+
+        get totalBudgetedDaily() {
+          return this.budgets.reduce((sum, b) => sum + (parseFloat(b.assigned) || 0), 0);
+        },
+
+        get guaranteedInvestment() {
+          // El dinero que queda estrictamente para inversión tras pagar fijos y apartar tus bolsas
+          return Math.max(this.totalIncome - this.totalFixedExpenses - this.totalBudgetedDaily, 0);
+        },
+
+        get todayDailySpendingLimit() {
+          const now = new Date();
+          const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+          const daysLeft = Math.max(lastDay - now.getDate() + 1, 1);
+          const totalRemaining = this.budgets.reduce((sum, b) => sum + Math.max(this.getBudgetRemaining(b.id), 0), 0);
+          return totalRemaining / daysLeft;
         },
 
         // CÁLCULOS DINÁMICOS
@@ -207,6 +255,7 @@
           this.modals.quickIncome = false;
           this.modals.quickFixed = false;
           this.modals.editSalary = false;
+          this.modals.editBudgets = false;
         },
 
         // Actualizar Sueldo Base
@@ -398,6 +447,7 @@ _Generado con SecuraQ Finanzas PWA_`;
           this.externalIncomes = [];
           this.fixedExpenses = [];
           this.dailyExpenses = [];
+          this.budgets.forEach(b => b.assigned = 0);
           this.forms.tempSalary = 0;
           this.saveData();
           this.showToast('Todo borrado. Balance en cero listo para tus datos.');
@@ -409,6 +459,12 @@ _Generado con SecuraQ Finanzas PWA_`;
           this.userData.baseSalary = 950;
           this.externalIncomes = [];
           this.dailyExpenses = [];
+          this.budgets = [
+            { id: 'Alimentación', name: 'Comida y Menús', icon: '🍔', assigned: 240, color: 'emerald' },
+            { id: 'Transporte', name: 'Pasajes y Transporte', icon: '🚌', assigned: 80, color: 'cyan' },
+            { id: 'Gustos', name: 'Gustos y Salidas', icon: '☕', assigned: 70, color: 'purple' },
+            { id: 'Salud', name: 'Salud e Imprevistos', icon: '💊', assigned: 60, color: 'amber' },
+          ];
           this.fixedExpenses = [
             { id: 1, title: 'Alquiler de casa', amount: 200, paid: true, dueDate: '05 de cada mes', category: 'Vivienda', isPaidOff: false },
             { id: 2, title: 'Préstamo personal (Saldado)', amount: 104, paid: true, dueDate: '10 de cada mes', category: 'Deuda', isPaidOff: true },
@@ -597,6 +653,90 @@ _Generado con SecuraQ Finanzas PWA_`;
             <div class="flex items-center justify-between text-xs pt-1 border-t border-slate-900">
               <span class="text-slate-400">Disponible aproximado de la quincena:</span>
               <span class="text-emerald-400 font-bold font-mono" x-text="`S/ ${formatMoney(currentQuincenaInfo.freeEstimate)}`">S/ 238.00</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- LÍMITE DE GASTO DIARIO RECOMENDADO PARA HOY -->
+        <div class="rounded-2xl bg-gradient-to-r from-emerald-950/40 via-slate-900 to-cyan-950/40 border border-emerald-500/30 p-4 space-y-2">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <span class="text-lg">🎯</span>
+              <div>
+                <h3 class="text-xs font-bold text-white uppercase tracking-wider">Límite Diario Recomendado</h3>
+                <p class="text-[10px] text-slate-400">Para mantener tu inversión protegida</p>
+              </div>
+            </div>
+            <div class="text-right">
+              <span class="text-lg font-extrabold text-emerald-400 font-mono" x-text="`S/ ${formatMoney(todayDailySpendingLimit)}`">S/ 15.00</span>
+              <p class="text-[9px] text-slate-500">por día</p>
+            </div>
+          </div>
+          <p class="text-[11px] text-slate-300 leading-tight">
+            💡 <em>Consejo CrisBeBe:</em> Si hoy gastas menos de esta meta (comida + pasajes), el dinero sobrante pasa automáticamente a tu bolsa de inversión.
+          </p>
+        </div>
+
+        <!-- BOLSAS SECCIONADAS DE PRESUPUESTO (CUÁNTO PUEDES GASTAR) -->
+        <div class="rounded-2xl bg-slate-900/90 border border-slate-800 p-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                <span>📦</span> Mis Bolsas Seccionadas
+              </h3>
+              <p class="text-[10px] text-slate-400">Cuánto tienes permitido gastar en cada cosa</p>
+            </div>
+            <button 
+              @click="openModal('editBudgets')" 
+              class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-slate-700 text-[11px] font-semibold transition"
+            >
+              ⚙️ Ajustar Límites
+            </button>
+          </div>
+
+          <!-- LISTADO DE BOLSAS -->
+          <div class="space-y-2.5">
+            <template x-for="b in budgets" :key="b.id">
+              <div class="p-3 bg-slate-950/90 rounded-xl border border-slate-800/80 space-y-1.5">
+                <div class="flex items-center justify-between text-xs">
+                  <div class="flex items-center space-x-2">
+                    <span class="text-sm" x-text="b.icon"></span>
+                    <span class="font-bold text-white" x-text="b.name"></span>
+                  </div>
+                  <div class="text-right">
+                    <span class="font-mono font-bold" :class="getBudgetRemaining(b.id) < 0 ? 'text-rose-400' : 'text-emerald-400'" x-text="`Quedan S/ ${formatMoney(getBudgetRemaining(b.id))}`"></span>
+                    <span class="text-[10px] text-slate-500 font-mono" x-text="` de S/ ${formatMoney(b.assigned)}`"></span>
+                  </div>
+                </div>
+
+                <!-- Barra de Consumo de la Bolsa -->
+                <div class="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-800">
+                  <div 
+                    class="h-full transition-all duration-300"
+                    :class="getBudgetPercent(b.id) >= 100 ? 'bg-rose-500' : (getBudgetPercent(b.id) >= 70 ? 'bg-amber-400' : 'bg-emerald-400')"
+                    :style="`width: ${getBudgetPercent(b.id)}%`"
+                  ></div>
+                </div>
+
+                <div class="flex justify-between items-center text-[10px] text-slate-400 pt-0.5">
+                  <span>Gastado: <strong class="text-slate-300 font-mono" x-text="`S/ ${formatMoney(getBudgetSpent(b.id))}`"></strong></span>
+                  <span :class="getBudgetRemaining(b.id) < 0 ? 'text-rose-400 font-bold' : 'text-slate-500'" x-text="getBudgetRemaining(b.id) < 0 ? '⚠️ Límite superado' : `${(100 - getBudgetPercent(b.id))}% disponible`"></span>
+                </div>
+              </div>
+            </template>
+
+            <!-- BOLSA SAGRADA DE INVERSIÓN BLINDADA -->
+            <div class="p-3 bg-emerald-950/20 rounded-xl border border-emerald-500/30 space-y-1">
+              <div class="flex items-center justify-between text-xs">
+                <div class="flex items-center space-x-2">
+                  <span class="text-sm">🚀</span>
+                  <span class="font-bold text-emerald-300">Bolsa Sagrada de Inversión</span>
+                </div>
+                <span class="font-mono font-extrabold text-emerald-400" x-text="`S/ ${formatMoney(guaranteedInvestment)}`"></span>
+              </div>
+              <p class="text-[10px] text-slate-400 leading-tight">
+                Capital blindado garantizado cada mes si respetas tus bolsas anteriores.
+              </p>
             </div>
           </div>
         </div>
@@ -1216,18 +1356,27 @@ _Generado con SecuraQ Finanzas PWA_`;
               >
             </div>
             <div>
-              <label class="block text-[11px] text-slate-400 mb-1">Categoría</label>
+              <label class="block text-[11px] text-slate-400 mb-1">Bolsa / Categoría</label>
               <select 
                 x-model="forms.daily.category" 
                 class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-rose-400"
               >
-                <option value="Alimentación">Alimentación</option>
-                <option value="Transporte">Transporte</option>
-                <option value="Gustos">Gustos / Antojos</option>
-                <option value="Salud">Salud</option>
-                <option value="Imprevistos">Imprevistos</option>
+                <option value="Alimentación">🍔 Alimentación</option>
+                <option value="Transporte">🚌 Transporte</option>
+                <option value="Gustos">☕ Gustos / Antojos</option>
+                <option value="Salud">💊 Salud / Imprevistos</option>
               </select>
             </div>
+          </div>
+
+          <!-- AVISO EN TIEMPO REAL DE DISPONIBILIDAD EN LA BOLSA -->
+          <div class="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between text-xs">
+            <span class="text-slate-400 text-[11px]">Disponible en esta bolsa:</span>
+            <span 
+              class="font-mono font-bold"
+              :class="getBudgetRemaining(forms.daily.category) < 0 ? 'text-rose-400' : 'text-emerald-400'"
+              x-text="`S/ ${formatMoney(getBudgetRemaining(forms.daily.category))}`"
+            ></span>
           </div>
 
           <button 
@@ -1404,6 +1553,65 @@ _Generado con SecuraQ Finanzas PWA_`;
             Guardar Cambios
           </button>
         </form>
+      </div>
+    </div>
+
+    <!-- MODAL: AJUSTAR LÍMITES DE BOLSAS -->
+    <div 
+      x-show="modals.editBudgets" 
+      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm"
+      style="display: none;"
+    >
+      <div 
+        @click.away="closeModals()" 
+        class="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-2xl max-h-[85vh] overflow-y-auto"
+      >
+        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+          <div>
+            <h3 class="text-sm font-bold text-white">⚙️ Ajustar Límites de Bolsas</h3>
+            <p class="text-[10px] text-slate-400">Cuánto puedes gastar al mes en cada cosa</p>
+          </div>
+          <button @click="closeModals()" class="text-slate-400 hover:text-white text-xs">✕</button>
+        </div>
+
+        <div class="space-y-3">
+          <template x-for="b in budgets" :key="b.id">
+            <div class="p-2.5 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
+              <label class="flex items-center justify-between text-xs font-semibold text-slate-300">
+                <span class="flex items-center gap-1.5"><span x-text="b.icon"></span> <span x-text="b.name"></span></span>
+                <span class="text-[10px] text-slate-500 font-mono" x-text="`S/ ${(b.assigned / 30).toFixed(1)}/día`"></span>
+              </label>
+              <div class="flex items-center space-x-2">
+                <span class="text-xs font-mono text-cyan-400">S/</span>
+                <input 
+                  type="number" 
+                  step="5" 
+                  x-model.number="b.assigned" 
+                  @input="saveData()"
+                  class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-white focus:outline-none focus:border-cyan-400"
+                >
+              </div>
+            </div>
+          </template>
+
+          <div class="p-2.5 bg-slate-950/80 rounded-xl border border-slate-800 text-[11px] space-y-1">
+            <div class="flex justify-between text-slate-400">
+              <span>Total en bolsas de gastos:</span>
+              <span class="font-bold font-mono text-white" x-text="`S/ ${formatMoney(totalBudgetedDaily)}`"></span>
+            </div>
+            <div class="flex justify-between text-emerald-400 font-semibold">
+              <span>Capital protegido para invertir:</span>
+              <span class="font-bold font-mono" x-text="`S/ ${formatMoney(guaranteedInvestment)}`"></span>
+            </div>
+          </div>
+
+          <button 
+            @click="closeModals(); showToast('Límites de bolsas guardados')" 
+            class="w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition"
+          >
+            Listo, Guardar Límites
+          </button>
+        </div>
       </div>
     </div>
 
